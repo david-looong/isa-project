@@ -1,3 +1,6 @@
+#ifndef SIGN_EXTEND_HPP
+#define SIGN_EXTEND_HPP
+
 #include <cstdint>
 
 /*
@@ -21,3 +24,5 @@ inline uint32_t sign_extend(uint32_t value, uint8_t sign_bit_index) {
 
     return extended_value;
 }
+
+#endif // SIGN_EXTEND_HPP
