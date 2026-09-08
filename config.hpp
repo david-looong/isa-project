@@ -2,6 +2,9 @@
 #define CONFIG_HPP
 
 #include <cstdint>
+#include <string>
+#include <map>
+#include <unordered_set>
 
 // Enum classes for categorical-type command line switches.
 enum class CacheType {dm, sa, fa};
@@ -23,7 +26,7 @@ struct CacheTypeConfig {
 
 // Configuration for all virtual machine command line switches.
 struct Config {
-    // Sttate of RV32M extension
+    // State of RV32M extension
     bool m = true;
 
     // State of RV32A extension
@@ -84,5 +87,9 @@ struct Config {
     // TLB eviction policy
     TLBEviction tlbE = TLBEviction::lru;
 };
+
+void fatal_error(std::string error);
+std::map<std::string,std::string> parse_config(std::string config_file);
+std::map<std::string,std::string> parse_cli(int argc, char* argv[]);
 
 #endif // CONFIG_HPP
