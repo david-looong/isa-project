@@ -5,6 +5,7 @@
 #include <string>
 #include <map>
 #include <unordered_set>
+#include <unordered_map>
 
 // Enum classes for categorical-type command line switches.
 enum class CacheType {dm, sa, fa};
@@ -91,5 +92,14 @@ struct Config {
 void fatal_error(std::string error);
 std::map<std::string,std::string> parse_config(std::string config_file);
 std::map<std::string,std::string> parse_cli(int argc, char* argv[]);
+bool skip_valid(const std::string& val);
+bool is_in_range_1_to_16(const std::string& val);
+bool is_in_range_0_to_3(const std::string& val);
+bool has_valid_suffix_b(const std::string& val);
+bool has_valid_suffix_d(const std::string& val);
+bool is_on_or_off(const std::string& val);
+bool check_enum_val_eviction(const std::string& val);
+bool check_enum_val_write(const std::string& val);
+bool check_enum_val_coherency(const std::string& val);
 
 #endif // CONFIG_HPP

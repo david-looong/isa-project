@@ -3,45 +3,93 @@
 #include <fstream>
 #include <sstream>
 #include <cstring>
+#include <functional>
 
-std::unordered_set<std::string> valid_switches = {
-    "f",
-    "i",
-    "o",
-    "m",
-    "a",
-    "mem",
-    "harts",
-    "hz",
-    "cL",
-    "c1",
-    "c2",
-    "c3",
-    "cS1",
-    "cS2",
-    "cS3",
-    "cB1",
-    "cB2",
-    "cB3",
-    "cW1",
-    "cW2",
-    "cW3",
-    "cE1",
-    "cE2",
-    "cE3",
-    "cC",
-    "bp",
-    "bpD",
-    "mmu",
-    "tlb",
-    "tlbE"
+std::unordered_map<std::string, std::function<bool(const std::string&)>> switch_table = {
+    {"f", skip_valid},
+    {"i", skip_valid},
+    {"o", skip_valid},
+    {"m", is_on_or_off},
+    {"a", is_on_or_off},
+    {"mem", has_valid_suffix_b},
+    {"harts", is_in_range_1_to_16},
+    {"hz", has_valid_suffix_d},
+    {"cL", is_in_range_0_to_3},
+    {"c1", skip_valid},
+    {"c2", skip_valid},
+    {"c3", skip_valid},
+    {"cS1", has_valid_suffix_b},
+    {"cS2", has_valid_suffix_b},
+    {"cS3", has_valid_suffix_b},
+    {"cW1", check_enum_val_write},
+    {"cW2", check_enum_val_write},
+    {"cW3", check_enum_val_write},
+    {"cE1", check_enum_val_eviction},
+    {"cE2", check_enum_val_eviction},
+    {"cE3", check_enum_val_eviction},
+    {"cC", check_enum_val_coherency},
+    {"bp", skip_valid},
+    {"bpD", is_in_range_0_to_3},
+    {"mmu", is_on_or_off},
+    {"tlb", skip_valid},
+    {"tlbE", check_enum_val_eviction}
 };
 
+// Handles fatal errors by printing the error message and exiting the program.
 void fatal_error(std::string error) {
     std::cerr << "Fatal error: " << error << std::endl;
     std::exit(1);
 }
 
+bool skip_valid(const std::string& val) {
+    return true;
+}
+
+bool is_in_range_1_to_16(const std::string& val) {
+    if (val.empty() || !std::all_of(val.begin(), val.end(), ::isdigit)) {
+        return false;
+    }
+    return (std::stoi(val) <= 16 && std::stoi(val) >= 1);
+}
+
+bool is_in_range_0_to_3(const std::string& val) {
+    if (val.empty() || !std::all_of(val.begin(), val.end(), ::isdigit)) {
+        return false;
+    }
+    return (std::stoi(val) <= 3 && std::stoi(val) >= 0);
+}
+
+bool has_valid_suffix_b(const std::string& val) {
+    if (val.back() == 'K' || val.back() == 'M' || val.back() == 'G') {
+        return true;
+    }
+    return (std::all_of(val.begin(), val.end(), ::isdigit));
+}
+
+bool has_valid_suffix_d(const std::string& val) {
+    if (val.back() == 'K' || val.back() == 'M' || val.back() == 'G') {
+        return true;
+    }
+    return (std::all_of(val.begin(), val.end(), ::isdigit));
+}
+
+bool is_on_or_off(const std::string& val) {
+    return (val.compare("on") == 0 || val.compare("off") == 0);
+}
+
+bool check_enum_val_eviction(const std::string& val) {
+    return (val.compare("fifo") == 0 || val.compare("lru") == 0 || val.compare("lfu") == 0);
+}
+
+bool check_enum_val_write(const std::string& val) {
+    return (val.compare("wb") == 0 || val.compare("wt") == 0);
+}
+
+bool check_enum_val_coherency(const std::string& val) {
+    return (val.compare("none") == 0 || val.compare("snoop") == 0 || val.compare("dir") == 0);
+}
+
+// Parses command-line arguments and returns a map of configuration switches and their corresponding values.
 std::map<std::string,std::string> parse_cli(int argc, char* argv[]) {
     std::string key, val, exe;
     std::map<std::string,std::string> tmp_map;
@@ -52,18 +100,24 @@ std::map<std::string,std::string> parse_cli(int argc, char* argv[]) {
         if (i % 2 != 0) {
             ss >> key;
             key.erase(0, 1);
-            if (valid_switches.find(key) == valid_switches.end()) {
+            if (switch_table.find(key) == switch_table.end()) {
                 fatal_error("Invalid configuration switch.");
             }
         } else {
             ss >> val;
-            tmp_map[key] = val;
+            std::function<bool(const std::string&)> validator = switch_table.find(key)->second;
+            if (validator(val)) {
+                tmp_map[key] = val;
+            } else {
+                fatal_error("Invalid switch value.");
+            }
         }
     }
 
     return tmp_map;
 }
 
+// Parses a configuration file and returns a map of configuration switches and their corresponding values.
 std::map<std::string,std::string> parse_config(std::string config_file) {
     std::ifstream fin;
     std::string line, key, val;
@@ -87,11 +141,16 @@ std::map<std::string,std::string> parse_config(std::string config_file) {
             std::stringstream ss(line);
             ss >> key >> val;
 
-            if (valid_switches.find(key) == valid_switches.end()) {
+            if (switch_table.find(key) == switch_table.end()) {
                 fatal_error("Invalid configuration switch.");
             }
 
-            config_map[key] = val;
+            std::function<bool(const std::string&)> validator = switch_table.find(key)->second;
+            if (validator(val)) {
+                config_map[key] = val;
+            } else {
+                fatal_error("Invalid switch value.");
+            }
         }
     }
 
