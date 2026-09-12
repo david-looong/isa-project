@@ -59,13 +59,13 @@ struct Config {
     uint8_t cB3 = 6;
 
     // # of rows in branch predictor table
-    uint8_t bp = 64;
+    uint32_t bp = 64;
 
     // Default prediction if branch address is not in table
     uint8_t bpD = 0;
 
     // # of TLB slots
-    uint8_t tlb = 8;
+    uint32_t tlb = 8;
 
     // Cache types (L1, L2, L3)
     CacheTypeConfig c1 = CacheTypeConfig(CacheType::dm, 0);
@@ -93,6 +93,7 @@ void fatal_error(std::string error);
 std::map<std::string,std::string> parse_config(std::string config_file);
 std::map<std::string,std::string> parse_cli(int argc, char* argv[]);
 bool skip_valid(const std::string& val);
+bool is_numeric(const std::string& val);
 bool is_in_range_1_to_16(const std::string& val);
 bool is_in_range_0_to_3(const std::string& val);
 bool has_valid_suffix_b(const std::string& val);
@@ -101,5 +102,6 @@ bool is_on_or_off(const std::string& val);
 bool check_enum_val_eviction(const std::string& val);
 bool check_enum_val_write(const std::string& val);
 bool check_enum_val_coherency(const std::string& val);
+bool check_cache(const std::string& val);
 
 #endif // CONFIG_HPP
