@@ -4,22 +4,24 @@
 #include <cstdint>
 #include <string>
 #include <map>
-#include <unordered_set>
 #include <unordered_map>
 
 // Enum classes for categorical-type command line switches.
 enum class CacheType {dm, sa, fa};
-enum class CacheWrite {wb, wt};
-enum class CacheEviction {fifo, lru, lfu};
+enum class WritePolicy {wb, wt};
+enum class EvictionPolicy {fifo, lru, lfu};
 enum class CacheCoherency {none, snoop, dir};
-enum class TLBEviction {fifo, lfu, lru};
 
 // Configuration for cache types to take ways exponent into account.
 struct CacheTypeConfig {
     CacheType type;
-    uint8_t ways_exponent;
+    uint32_t ways_exponent;
 
-    CacheTypeConfig(CacheType t, uint8_t e) {
+    CacheTypeConfig() {
+        ways_exponent = 0;
+    };
+
+    CacheTypeConfig(CacheType t, uint32_t e) {
         type = t;
         ways_exponent = e;
     }
@@ -40,13 +42,13 @@ struct Config {
     uint32_t mem = 1048576;
 
     // # of HARTs
-    uint8_t harts = 4;
+    uint32_t harts = 4;
 
     // Cycle frequency in Hertz
     uint32_t hz = 100;
 
     // Cache levels (No cache, L1, L1/L2, L1/L2/L3)
-    uint8_t cL = 3;
+    uint32_t cL = 3;
 
     // Cache sizes in bytes (L1, L2, L3)
     uint32_t cS1 = 1024;
@@ -54,15 +56,15 @@ struct Config {
     uint32_t cS3 = 4096;
 
     // Cache block sizes in bytes (L1, L2, L3)
-    uint8_t cB1 = 4;
-    uint8_t cB2 = 5;
-    uint8_t cB3 = 6;
+    uint32_t cB1 = 4;
+    uint32_t cB2 = 5;
+    uint32_t cB3 = 6;
 
     // # of rows in branch predictor table
     uint32_t bp = 64;
 
     // Default prediction if branch address is not in table
-    uint8_t bpD = 0;
+    uint32_t bpD = 0;
 
     // # of TLB slots
     uint32_t tlb = 8;
@@ -73,25 +75,24 @@ struct Config {
     CacheTypeConfig c3 = CacheTypeConfig(CacheType::fa, 0);
 
     // Cache write policies (L1, L2, L3)
-    CacheWrite cW1 = CacheWrite::wt;
-    CacheWrite cW2 = CacheWrite::wt;
-    CacheWrite cW3 = CacheWrite::wb;
+    WritePolicy cW1 = WritePolicy::wt;
+    WritePolicy cW2 = WritePolicy::wt;
+    WritePolicy cW3 = WritePolicy::wb;
 
     // Cache eviction policies (L1, L2, L3)
-    CacheEviction cE1 = CacheEviction::fifo;
-    CacheEviction cE2 = CacheEviction::lru;
-    CacheEviction cE3 = CacheEviction::lfu;
+    EvictionPolicy cE1 = EvictionPolicy::fifo;
+    EvictionPolicy cE2 = EvictionPolicy::lru;
+    EvictionPolicy cE3 = EvictionPolicy::lfu;
 
     // Cache coherency protocol
     CacheCoherency cC = CacheCoherency::snoop;
 
     // TLB eviction policy
-    TLBEviction tlbE = TLBEviction::lru;
+    EvictionPolicy tlbE = EvictionPolicy::lru;
 };
 
 void fatal_error(std::string error);
-std::map<std::string,std::string> parse_config(std::string config_file);
-std::map<std::string,std::string> parse_cli(int argc, char* argv[]);
+
 bool skip_valid(const std::string& val);
 bool is_numeric(const std::string& val);
 bool is_in_range_1_to_16(const std::string& val);
@@ -103,5 +104,20 @@ bool check_enum_val_eviction(const std::string& val);
 bool check_enum_val_write(const std::string& val);
 bool check_enum_val_coherency(const std::string& val);
 bool check_cache(const std::string& val);
+
+void skip_change(Config& config, const std::string& key, std::string& val);
+void change_numeric(Config& config, const std::string& key, std::string& val);
+void change_suffix_b(Config& config, const std::string& key, std::string& val);
+void change_suffix_d(Config& config, const std::string& key, std::string& val);
+void change_bool(Config& config, const std::string& key, std::string& val);
+void change_enum_eviction(Config& config, const std::string& key, std::string& val);
+void change_enum_write(Config& config, const std::string& key, std::string& val);
+void change_enum_coherency(Config& config, const std::string& key, std::string& val);
+void change_cache(Config& config, const std::string& key, std::string& val);
+
+std::map<std::string,std::string> parse_cli(int argc, char* argv[]);
+std::map<std::string,std::string> parse_config(std::string config_file);
+
+Config value_conversion(std::map<std::string,std::string> final_map);
 
 #endif // CONFIG_HPP
