@@ -40,6 +40,10 @@ uint32_t Hart::get_pc() {
     return pc;
 }
 
+uint32_t Hart::get_csr(uint32_t num) {
+    return csrs.read(num);
+}
+
 uint32_t Hart::read_register(uint32_t index) {
     return rf.read(index);
 }

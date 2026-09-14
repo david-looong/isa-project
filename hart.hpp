@@ -36,11 +36,14 @@ class Hart {
         uint32_t sp;
 
         RegisterFile rf;
+
+        Machine &m;
     public:
-        Hart(Machine &machine, uint32_t hart_id, bool mmu) : csrs(hart_id, mmu), pc(0), sp(machine.getMemorySize() & ~0xF), rf(RegisterFile()) {
+        Hart(Machine &machine, uint32_t hart_id, bool mmu) : csrs(hart_id, mmu), pc(0), sp(machine.getMemorySize() & ~0xF), rf(RegisterFile()), m(machine) {
             rf.write(2, sp);
         }
         uint32_t get_pc();
+        uint32_t get_csr(uint32_t num);
         uint32_t read_register(uint32_t index);
 };
 
