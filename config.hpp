@@ -1,3 +1,9 @@
+/* Name: David Long
+ * Date: September 16, 2026
+ * Synopsis: This header file contains a Config struct, validation functions,
+ * modifier functions, and parsing functions that help with configuring the machine.
+ */
+
 #ifndef CONFIG_HPP
 #define CONFIG_HPP
 
@@ -5,6 +11,14 @@
 #include <string>
 #include <map>
 #include <unordered_map>
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <cstring>
+#include <cmath>
+#include <functional>
+#include <vector>
+#include <algorithm>
 
 // Enum classes for categorical-type command line switches.
 enum class CacheType {dm, sa, fa};
@@ -91,8 +105,10 @@ struct Config {
     EvictionPolicy tlbE = EvictionPolicy::lru;
 };
 
+// Fatal error function
 void fatal_error(std::string error);
 
+// Validation functions
 bool skip_valid(const std::string& val);
 bool is_numeric(const std::string& val);
 bool is_in_range_1_to_16(const std::string& val);
@@ -105,6 +121,7 @@ bool check_enum_val_write(const std::string& val);
 bool check_enum_val_coherency(const std::string& val);
 bool check_cache(const std::string& val);
 
+// Modifier functions
 void skip_change(Config& config, const std::string& key, std::string& val);
 void change_numeric(Config& config, const std::string& key, std::string& val);
 void change_suffix_b(Config& config, const std::string& key, std::string& val);
@@ -115,9 +132,11 @@ void change_enum_write(Config& config, const std::string& key, std::string& val)
 void change_enum_coherency(Config& config, const std::string& key, std::string& val);
 void change_cache(Config& config, const std::string& key, std::string& val);
 
+// Parsing functions
 std::map<std::string,std::string> parse_cli(int argc, char* argv[]);
 std::map<std::string,std::string> parse_config(std::string config_file);
 
+// Conversion pass function
 Config value_conversion(std::map<std::string,std::string> final_map);
 
 #endif // CONFIG_HPP

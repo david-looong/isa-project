@@ -1,13 +1,17 @@
+/* Name: David Long
+ * Date: September 16, 2026
+ * Synopsis: This header file contains a function that performs sign extension on a given
+ * unsigned 32-bit integer value based on the specified sign bit index and return the
+ * sign-extended value as a signed 32-bit integer.
+ * NOTE: I received some assistance from Finn Sparks during discussions on how to properly
+ * calculate the mask.
+ */
+
 #ifndef SIGN_EXTEND_HPP
 #define SIGN_EXTEND_HPP
 
 #include <cstdint>
 
-/*
- * This function performs sign extension on a given unsigned 32-bit integer value based
- * on the specified sign bit index and returns the sign-extended value as a signed 32-bit
- * integer.
- */
 inline uint32_t sign_extend(uint32_t value, uint8_t sign_bit_index) {
     // Isolate the sign bit.
     uint32_t sign_bit = (value >> sign_bit_index) & 1;

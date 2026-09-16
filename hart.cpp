@@ -1,5 +1,12 @@
+/* Name: David Long
+ * Date: September 16, 2026
+ * Synopsis: This CPP file contains the contents of the previously declared functions
+ * in hart.hpp as well as a lookup table for Csrs.
+ */
+
 #include "hart.hpp"
 
+// Lookup table associating numbers with their respective Csr.
 std::unordered_map<uint32_t, std::string> csr_table {
     {0xF14, "mhartid"},
     {0x180, "satp"},
@@ -11,11 +18,15 @@ std::unordered_map<uint32_t, std::string> csr_table {
     {0xC82, "instreth"}
 };
 
+// Reads the value of a Csr.
 uint32_t Csr::read(uint32_t num) {
+    // Returns 0 if the number is invalid.
     if (csr_table.find(num) == csr_table.end()) return 0;
 
+    // Finds the appropriate Csr
     std::string csr_entry = csr_table.at(num);
 
+    // Returns the value of the Csr.
     if (csr_entry == "mhartid")         return mhartid;
     else if (csr_entry == "satp")       return satp;
     else if (csr_entry == "time")       return static_cast<uint32_t>(time);
@@ -27,23 +38,29 @@ uint32_t Csr::read(uint32_t num) {
     else                                return static_cast<uint32_t>(0);
 }
 
+// Overwrites a Csr value with a new value.
 void Csr::write(uint32_t num, uint32_t val) {
+    // If the number is invalid or is attributed to a read-only Csr, nothing happens.
     if (csr_table.find(num) == csr_table.end() || csr_table.find(num)->second != "satp") {
         return;
     }
 
+    // If the mmu is enabled, then the satp Csr is written to.
     if (mmu_enabled)    satp = val;
     return;
 }
 
+// Returns the value of the program counter.
 uint32_t Hart::get_pc() {
     return pc;
 }
 
+// Returns the value of a Csr.
 uint32_t Hart::get_csr(uint32_t num) {
     return csrs.read(num);
 }
 
+// Returns the value of a Hart's register.
 uint32_t Hart::read_register(uint32_t index) {
     return rf.read(index);
 }

@@ -1,3 +1,9 @@
+/* Name: David Long
+ * Date: September 16, 2026
+ * Synopsis: This CPP file contains the contents of the previously declared functions
+ * in register_file.hpp.
+ */
+
 #include "register_file.hpp"
 
 // Initializes all 32 registers to 0.

@@ -1,3 +1,10 @@
+/* Name: David Long
+ * Date: September 16, 2026
+ * Synopsis: This header file contains a RegisterFile class that yields 32-bit registers.
+ * It also includes declarations for a default constructor and read/write functions
+ * tht access the registers.
+ */
+
 #ifndef REGISTER_FILE_HPP
 #define REGISTER_FILE_HPP
 

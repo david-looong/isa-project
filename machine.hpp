@@ -1,8 +1,16 @@
+/* Name: David Long
+ * Date: September 16, 2026
+ * Synopsis: This header file contains a Machine class that yields the memory size and
+ * RAM storage. It declares a constructor, getter function for the memory size, and read
+ * and write functions that access RAM.
+ */
+
 #ifndef MACHINE_HPP
 #define MACHINE_HPP
 
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 class Machine {
     private:

@@ -1,3 +1,12 @@
+/* Name: David Long
+ * Date: September 16, 2026
+ * Synopsis: This header file yields a Hart and Csr class. The Csr class contains
+ * the eight Csr registers and declares a constructor and read/write functions. The
+ * Hart class contains a program counter, stack pointer, a Csr object, a RegisterFile
+ * object, and a reference to a Machine object. The class declares a constructor, 
+ * getter functions for the program counter and Csrs, and a read register function.
+ */
+
 #ifndef HART_HPP
 #define HART_HPP
 
@@ -39,9 +48,7 @@ class Hart {
 
         Machine &m;
     public:
-        Hart(Machine &machine, uint32_t hart_id, bool mmu) : csrs(hart_id, mmu), pc(0), sp(machine.getMemorySize() & ~0xF), rf(RegisterFile()), m(machine) {
-            rf.write(2, sp);
-        }
+        Hart(Machine &machine, uint32_t hart_id, bool mmu) : csrs(hart_id, mmu), pc(0), sp(), rf(RegisterFile()), m(machine) {}
         uint32_t get_pc();
         uint32_t get_csr(uint32_t num);
         uint32_t read_register(uint32_t index);
