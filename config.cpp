@@ -1,13 +1,12 @@
-#include "config.hpp"
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <cstring>
-#include <cmath>
-#include <functional>
-#include <vector>
-#include <algorithm>
+/* Name: David Long
+ * Date: September 18, 2026
+ * Synopsis: This CPP file contains the contents of the previously declared functions
+ * in config.hpp as well as lookup tables for for validating and modifying configuration values.
+ */
 
+#include "config.hpp"
+
+// Lookup table associating configuration switches with their respective validation functions.
 std::unordered_map<std::string, std::function<bool(const std::string&)>> switch_table_validator = {
     {"f", skip_valid},
     {"i", skip_valid},
@@ -41,6 +40,7 @@ std::unordered_map<std::string, std::function<bool(const std::string&)>> switch_
     {"tlbE", check_enum_val_eviction}
 };
 
+// Lookup table associating configuration switches with their respective modification functions.
 std::unordered_map<std::string, std::function<void(Config&, const std::string&, std::string&)>> switch_table_modifier = {
     {"f", skip_change},
     {"i", skip_change},
@@ -80,14 +80,17 @@ void fatal_error(std::string error) {
     std::exit(1);
 }
 
+// Skips switches that are not members of the Config struct.
 bool skip_valid(const std::string& val) {
     return true;
 }
 
+// Validates if a string is numeric.
 bool is_numeric(const std::string& val) {
     return (std::all_of(val.begin(), val.end(), ::isdigit));
 }
 
+// Validates if a string is in the range of 1 to 16.
 bool is_in_range_1_to_16(const std::string& val) {
     if (!std::all_of(val.begin(), val.end(), ::isdigit)) {
         return false;
@@ -95,6 +98,7 @@ bool is_in_range_1_to_16(const std::string& val) {
     return (std::stoi(val) <= 16 && std::stoi(val) >= 1);
 }
 
+// Validates if a string is in the range of 0 to 3.
 bool is_in_range_0_to_3(const std::string& val) {
     if (!std::all_of(val.begin(), val.end(), ::isdigit)) {
         return false;
@@ -102,6 +106,7 @@ bool is_in_range_0_to_3(const std::string& val) {
     return (std::stoi(val) <= 3 && std::stoi(val) >= 0);
 }
 
+// Validates if a string has a valid suffix for bytes (K, M, G) or is numeric.
 bool has_valid_suffix_b(const std::string& val) {
     if (val.back() == 'K' || val.back() == 'M' || val.back() == 'G') {
         return true;
@@ -109,6 +114,7 @@ bool has_valid_suffix_b(const std::string& val) {
     return (std::all_of(val.begin(), val.end(), ::isdigit));
 }
 
+// Validates if a string has a valid suffix for decimal (K, M, G) or is numeric.
 bool has_valid_suffix_d(const std::string& val) {
     if (val.back() == 'K' || val.back() == 'M' || val.back() == 'G') {
         return true;
@@ -116,22 +122,27 @@ bool has_valid_suffix_d(const std::string& val) {
     return (std::all_of(val.begin(), val.end(), ::isdigit));
 }
 
+// Validates if a string is either "on" or "off".
 bool is_on_or_off(const std::string& val) {
     return (val == "on" || val == "off");
 }
 
+// Validates if a string has a valid eviction policy value (fifo, lru, lfu).
 bool check_enum_val_eviction(const std::string& val) {
     return (val == "fifo" || val == "lru" || val == "lfu");
 }
 
+// Validates if a string has a valid write policy value (wb, wt).
 bool check_enum_val_write(const std::string& val) {
     return (val == "wb" || val == "wt");
 }
 
+//  Validates if a string has a valid cache coherency protocol value (none, snoop, dir).
 bool check_enum_val_coherency(const std::string& val) {
     return (val == "none" || val == "snoop" || val == "dir");
 }
 
+// Validates if a string has a valid cache type value (dm, sa, fa) and if sa has a valid number of ways.
 bool check_cache(const std::string& val) {
     std::vector<std::string> cache_type;
     std::stringstream ss(val);
@@ -150,10 +161,12 @@ bool check_cache(const std::string& val) {
             || cache_type[0] == "fa");
 }
 
+// Skips switches that are not members of the Config struct.
 void skip_change(Config& config, const std::string& key, std::string& val) {
     return;
 }
 
+// Changes the value of a numeric configuration switch in the Config struct.
 void change_numeric(Config& config, const std::string& key, std::string& val) {
     if (key == "harts")     config.harts = static_cast<uint32_t>(std::stoul(val));
     else if (key == "cL")   config.cL = static_cast<uint32_t>(std::stoul(val));
@@ -167,6 +180,7 @@ void change_numeric(Config& config, const std::string& key, std::string& val) {
     return;
 }
 
+// Changes the value of a configuration switch in the Config struct that has a suffix for bytes (K, M, G).
 void change_suffix_b(Config& config, const std::string& key, std::string& val) {
     uint32_t mult = 1;
     
@@ -184,6 +198,7 @@ void change_suffix_b(Config& config, const std::string& key, std::string& val) {
     return;
 }
 
+// Changes the value of a configuration switch in the Config struct that has a suffix for decimal (K, M, G).
 void change_suffix_d(Config& config, const std::string& key, std::string& val) {
     uint32_t mult = 1;
     
@@ -198,6 +213,7 @@ void change_suffix_d(Config& config, const std::string& key, std::string& val) {
     return;
 }
 
+// Changes the value of a boolean configuration switch in the Config struct.
 void change_bool(Config& config, const std::string& key, std::string& val) {
     if (key == "m")         config.m = (val == "on");
     else if (key == "a")    config.a = (val == "on");
@@ -206,6 +222,7 @@ void change_bool(Config& config, const std::string& key, std::string& val) {
     return;
 }
 
+// Changes the value of an eviction policy configuration switch in the Config struct.
 void change_enum_eviction(Config& config, const std::string& key, std::string& val) {
     EvictionPolicy evic_val;
 
@@ -221,6 +238,7 @@ void change_enum_eviction(Config& config, const std::string& key, std::string& v
     return;
 }
 
+// Changes the value of a write policy configuration switch in the Config struct.
 void change_enum_write(Config& config, const std::string& key, std::string& val) {
     WritePolicy write_val;
 
@@ -234,6 +252,7 @@ void change_enum_write(Config& config, const std::string& key, std::string& val)
     return;
 }
 
+// Changes the value of a cache coherency protocol configuration switch in the Config struct.
 void change_enum_coherency(Config& config, const std::string& key, std::string& val) {
     if (val == "none")          config.cC = CacheCoherency::none;
     else if (val == "snoop")    config.cC = CacheCoherency::snoop;
@@ -242,6 +261,7 @@ void change_enum_coherency(Config& config, const std::string& key, std::string& 
     return;
 }
 
+// Changes the value of a cache type configuration switch in the Config struct.
 void change_cache(Config& config, const std::string& key, std::string& val) {
     std::vector<std::string> cache_type;
     std::stringstream ss(val);
@@ -277,18 +297,23 @@ std::map<std::string,std::string> parse_cli(int argc, char* argv[]) {
     for (int i = 1; i < argc; i++) {
         std::stringstream ss(argv[i]);
         
+        // If the index is odd, it is a switch. If the index is even, it is a value.
         if (i % 2 != 0) {
             ss >> key;
             key.erase(0, 1);
+
+            // Validates the key using the lookup table.
             if (switch_table_validator.find(key) == switch_table_validator.end()) {
                 fatal_error("Invalid configuration switch.");
             }
         } else {
+            // Checks if a value is present.
             ss >> val;
             if (ss.fail()) {
                 fatal_error("No value after switch.");
             }
 
+            // Validates the value using the appropriate validation function from the lookup table.
             std::function<bool(const std::string&)> validator = switch_table_validator.find(key)->second;
             if (validator(val)) {
                 tmp_map[key] = val;
@@ -308,21 +333,25 @@ std::map<std::string,std::string> parse_config(std::string config_file) {
     std::map<std::string,std::string> config_map;
     size_t hashtag_pos;
 
+    // Opens the configuration file and checks if it was opened successfully.
     fin.open(config_file);
     if (!fin.is_open()) {
         fatal_error("Unable to open config file.");
     }
 
     while (getline(fin, line)) {
+        // Removes comments from the line.
         hashtag_pos = line.find('#');
         if (hashtag_pos != std::string::npos) {
             line.resize(hashtag_pos);
         }
 
+        // If the line is not empty, it parses the key and value and validates them.
         if (line.length() > 0) {
             std::stringstream ss(line);
             ss >> key;
 
+            // Validates the key using the lookup table.
             if (switch_table_validator.find(key) == switch_table_validator.end()
                 || key == "f"
                 || key == "i"
@@ -330,11 +359,13 @@ std::map<std::string,std::string> parse_config(std::string config_file) {
                 fatal_error("Invalid configuration switch.");
             }
 
+            // Checks if a value is present.
             ss >> val;
             if (ss.fail()) {
                 fatal_error("No value after switch.");
             }
 
+            // Validates the value using the appropriate validation function from the lookup table.
             std::function<bool(const std::string&)> validator = switch_table_validator.find(key)->second;
             if (validator(val)) {
                 config_map[key] = val;
@@ -348,6 +379,7 @@ std::map<std::string,std::string> parse_config(std::string config_file) {
     return config_map;
 }
 
+// Converts a map of configuration switches and their corresponding values into a Config struct.
 Config value_conversion(std::map<std::string,std::string> final_map) {
     Config config;
     std::function<void(Config&, const std::string&, std::string&)> change_function;
