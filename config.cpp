@@ -302,9 +302,11 @@ std::map<std::string,std::string> parse_cli(int argc, char* argv[]) {
             ss >> key;
             key.erase(0, 1);
 
-            // Validates the key using the lookup table.
+            // Validates the key using the lookup table and if switch is last argument.
             if (switch_table_validator.find(key) == switch_table_validator.end()) {
                 fatal_error("Invalid configuration switch.");
+            } else if (i + 1 == argc) {
+                fatal_error("No value after switch.");
             }
         } else {
             // Checks if a value is present.

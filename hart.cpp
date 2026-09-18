@@ -64,3 +64,18 @@ uint32_t Hart::get_csr(uint32_t num) {
 uint32_t Hart::read_register(uint32_t index) {
     return rf.read(index);
 }
+
+// Overwrites a Hart's register with a new value.
+void Hart::write_register(uint32_t index, uint32_t value) {
+    return rf.write(index, value);
+}
+
+// Returns the value of a Hart's memory at a given address.
+uint32_t Hart::read_memory(uint32_t addr, uint8_t size) {
+    return m.read(addr, size);
+}
+
+// Overwrites a Hart's memory at a given address with a new value.
+void Hart::write_memory(uint32_t addr, uint8_t size, uint32_t value) {
+    return m.write(addr, size, value);
+}

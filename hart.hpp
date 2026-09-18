@@ -42,16 +42,19 @@ class Hart {
         Csr csrs;
 
         uint32_t pc;
-        uint32_t sp;
 
         RegisterFile rf;
 
         Machine &m;
     public:
-        Hart(Machine &machine, uint32_t hart_id, bool mmu) : csrs(hart_id, mmu), pc(0), sp(), rf(RegisterFile()), m(machine) {}
+        Hart(Machine &machine, uint32_t hart_id, bool mmu) : csrs(hart_id, mmu), pc(0), rf(RegisterFile()), m(machine) {}
         uint32_t get_pc();
         uint32_t get_csr(uint32_t num);
         uint32_t read_register(uint32_t index);
+        void write_register(uint32_t index, uint32_t value);
+        uint32_t read_memory(uint32_t addr, uint8_t size);
+        void write_memory(uint32_t addr, uint8_t size, uint32_t value);
+
 };
 
 #endif // HART_HPP
