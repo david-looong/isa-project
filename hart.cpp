@@ -55,6 +55,12 @@ uint32_t Hart::get_pc() {
     return pc;
 }
 
+// Sets the program counter to e_entry from ELF header.
+void Hart::set_pc(uint32_t val) {
+    pc = val;
+    return;
+}
+
 // Returns the value of a Csr.
 uint32_t Hart::get_csr(uint32_t num) {
     return csrs.read(num);

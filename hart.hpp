@@ -49,6 +49,7 @@ class Hart {
     public:
         Hart(Machine &machine, uint32_t hart_id, bool mmu) : csrs(hart_id, mmu), pc(0), rf(RegisterFile()), m(machine) {}
         uint32_t get_pc();
+        void set_pc(uint32_t val);
         uint32_t get_csr(uint32_t num);
         uint32_t read_register(uint32_t index);
         void write_register(uint32_t index, uint32_t value);
