@@ -14,7 +14,7 @@ uint32_t load_elf(const std::string& path, Machine& machine) {
     std::ifstream fin;
     std::vector<uint8_t> elf_buffer;
     std::vector<program_headers> ph_store;
-    elf_headers headers;
+    elf_headers eh;
     program_headers ph;
 
     fin.open(path, std::ios::binary);
@@ -37,45 +37,63 @@ uint32_t load_elf(const std::string& path, Machine& machine) {
         fatal_error("Short ELF read.");
     }
 
-    headers.e_bitsize = read_bytes(elf_buffer, static_cast<uint32_t>(4), 1);
-    headers.e_endian = read_bytes(elf_buffer, static_cast<uint32_t>(5), 1);
-    headers.e_filever = read_bytes(elf_buffer, static_cast<uint32_t>(6), 1);
-    headers.e_osabi = read_bytes(elf_buffer, static_cast<uint32_t>(7), 1);
-    headers.e_abiver = read_bytes(elf_buffer, static_cast<uint32_t>(8), 1);
-    headers.e_type = read_bytes(elf_buffer, static_cast<uint32_t>(16), 2);
-    headers.e_machine = read_bytes(elf_buffer, static_cast<uint32_t>(18), 2);
-    headers.e_version = read_bytes(elf_buffer, static_cast<uint32_t>(20), 4);
-    headers.e_entry = read_bytes(elf_buffer, static_cast<uint32_t>(24), 4);
-    headers.e_phoff = read_bytes(elf_buffer, static_cast<uint32_t>(28), 4);
-    headers.e_shoff = read_bytes(elf_buffer, static_cast<uint32_t>(32), 4);
-    headers.e_flags = read_bytes(elf_buffer, static_cast<uint32_t>(36), 4);
-    headers.e_ehsize = read_bytes(elf_buffer, static_cast<uint32_t>(40), 2);
-    headers.e_phentsize = read_bytes(elf_buffer, static_cast<uint32_t>(42), 2);
-    headers.e_phnum = read_bytes(elf_buffer, static_cast<uint32_t>(44), 2);
-    headers.e_shentsize = read_bytes(elf_buffer, static_cast<uint32_t>(46), 2);
-    headers.e_shnum = read_bytes(elf_buffer, static_cast<uint32_t>(48), 2);
-    headers.e_shstrndx = read_bytes(elf_buffer, static_cast<uint32_t>(50), 2);
+    eh.e_bitsize = read_bytes(elf_buffer, static_cast<uint32_t>(4), 1);
+    eh.e_endian = read_bytes(elf_buffer, static_cast<uint32_t>(5), 1);
+    eh.e_filever = read_bytes(elf_buffer, static_cast<uint32_t>(6), 1);
+    eh.e_osabi = read_bytes(elf_buffer, static_cast<uint32_t>(7), 1);
+    eh.e_abiver = read_bytes(elf_buffer, static_cast<uint32_t>(8), 1);
+    eh.e_type = read_bytes(elf_buffer, static_cast<uint32_t>(16), 2);
+    eh.e_machine = read_bytes(elf_buffer, static_cast<uint32_t>(18), 2);
+    eh.e_version = read_bytes(elf_buffer, static_cast<uint32_t>(20), 4);
+    eh.e_entry = read_bytes(elf_buffer, static_cast<uint32_t>(24), 4);
+    eh.e_phoff = read_bytes(elf_buffer, static_cast<uint32_t>(28), 4);
+    eh.e_shoff = read_bytes(elf_buffer, static_cast<uint32_t>(32), 4);
+    eh.e_flags = read_bytes(elf_buffer, static_cast<uint32_t>(36), 4);
+    eh.e_ehsize = read_bytes(elf_buffer, static_cast<uint32_t>(40), 2);
+    eh.e_phentsize = read_bytes(elf_buffer, static_cast<uint32_t>(42), 2);
+    eh.e_phnum = read_bytes(elf_buffer, static_cast<uint32_t>(44), 2);
+    eh.e_shentsize = read_bytes(elf_buffer, static_cast<uint32_t>(46), 2);
+    eh.e_shnum = read_bytes(elf_buffer, static_cast<uint32_t>(48), 2);
+    eh.e_shstrndx = read_bytes(elf_buffer, static_cast<uint32_t>(50), 2);
 
     if (elf_buffer[0] != 0x7f || elf_buffer[1] != 'E' || elf_buffer[2] != 'L' || elf_buffer[3] != 'F') {
         fatal_error("Invalid ELF magic bytes.");
-    } else if (headers.e_type != 2) {
+    } else if (eh.e_type != 2) {
         fatal_error("Non-executable type per ELF.");
-    } else if (headers.e_machine != 243) {
+    } else if (eh.e_machine != 243) {
         fatal_error("Invalid machine target for ELF.");
-    } else if (headers.e_bitsize != 1) {
+    } else if (eh.e_bitsize != 1) {
         fatal_error("Invalid bitsize per ELF.");
     }
 
-    for (uint32_t i = 0; i < headers.e_phnum; i++) {
-        ph.p_type = read_bytes(elf_buffer, headers.e_phoff + (i * headers.e_phentsize), 4);
-        ph.p_offset = read_bytes(elf_buffer, headers.e_phoff + (i * headers.e_phentsize) + 4, 4);
-        ph.p_vaddr = read_bytes(elf_buffer, headers.e_phoff + (i * headers.e_phentsize) + 8, 4);
-        ph.p_paddr = read_bytes(elf_buffer, headers.e_phoff + (i * headers.e_phentsize) + 12, 4);
-        ph.p_filesz = read_bytes(elf_buffer, headers.e_phoff + (i * headers.e_phentsize) + 16, 4);
-        ph.p_memsz = read_bytes(elf_buffer, headers.e_phoff + (i * headers.e_phentsize) + 20, 4);
-        ph.p_flags = read_bytes(elf_buffer, headers.e_phoff + (i * headers.e_phentsize) + 24, 4);
-        ph.p_align = read_bytes(elf_buffer, headers.e_phoff + (i * headers.e_phentsize) + 28, 4);
+    for (uint32_t i = 0; i < eh.e_phnum; i++) {
+        ph.p_type = read_bytes(elf_buffer, eh.e_phoff + (i * eh.e_phentsize), 4);
+        ph.p_offset = read_bytes(elf_buffer, eh.e_phoff + (i * eh.e_phentsize) + 4, 4);
+        ph.p_vaddr = read_bytes(elf_buffer, eh.e_phoff + (i * eh.e_phentsize) + 8, 4);
+        ph.p_paddr = read_bytes(elf_buffer, eh.e_phoff + (i * eh.e_phentsize) + 12, 4);
+        ph.p_filesz = read_bytes(elf_buffer, eh.e_phoff + (i * eh.e_phentsize) + 16, 4);
+        ph.p_memsz = read_bytes(elf_buffer, eh.e_phoff + (i * eh.e_phentsize) + 20, 4);
+        ph.p_flags = read_bytes(elf_buffer, eh.e_phoff + (i * eh.e_phentsize) + 24, 4);
+        ph.p_align = read_bytes(elf_buffer, eh.e_phoff + (i * eh.e_phentsize) + 28, 4);
+
+        if (ph.p_type != 1) continue;
+
+        if (static_cast<uint64_t>(ph.p_vaddr) + ph.p_memsz > machine.getMemorySize()) {
+            fatal_error("Out-of-range virtual address");
+        }
+
+        for (uint32_t j = 0; j < ph.p_filesz; j++) {
+            machine.write(ph.p_vaddr + j, 1, read_bytes(elf_buffer, ph.p_offset + j, 1));
+        }
+
+        if (ph.p_memsz > ph.p_filesz) {
+            for (uint32_t k = 0; k < (ph.p_memsz - ph.p_filesz); k++) {
+                machine.write(ph.p_vaddr + ph.p_filesz + k, 1, 0);
+            }
+        }
 
         ph_store.push_back(ph);
     }
+
+    return eh.e_entry;
 }
