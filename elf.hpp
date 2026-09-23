@@ -1,3 +1,10 @@
+/* Name: David Long
+ * Date: September 23, 2026
+ * Synopsis: This header file contains two structs for ELF headers and program
+ * headers, as well as two functions that read bytes in little endian and load
+ * the ELF file.
+ */
+
 #ifndef ELF_HPP
 #define ELF_HPP
 

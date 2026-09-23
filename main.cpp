@@ -31,6 +31,7 @@ int main(int argc, char* argv[]) {
         resolved[it->first] = it->second;
     }
 
+    // Checks if the input ELF file is specified in the resolved configuration.
     if (resolved.find("i") == resolved.end()) {
         fatal_error("Input ELF file not specified.");
     }
@@ -41,10 +42,11 @@ int main(int argc, char* argv[]) {
     Machine machine = Machine(final_config.mem);
     std::vector<Hart> harts = {};
 
+    // Loads the ELF file into the machine's memory and retrieves the entry point address.
     uint32_t entry = load_elf(resolved["i"], machine);
 
-    // Creates a Hart object for each hart specified in the configuration and prints out the contents of
-    // each Hart's registers, program counter, and Csrs.
+    // Creates a Hart object for each hart specified in the configuration, sets the PC, and
+    // prints out the contents of each Hart's registers, program counter, and Csrs.
     for (uint32_t i = 0; i < final_config.harts; i++) {
         harts.push_back(Hart(machine, i, final_config.mmu));
         harts[i].set_pc(entry);

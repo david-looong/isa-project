@@ -1,5 +1,12 @@
+/* Name: David Long
+ * Date: September 23, 2026
+ * Synopsis: This CPP file contains the contents of the previously declared functions
+ * in elf.hpp.
+ */
+
 #include "elf.hpp"
 
+// Reads bytes in little-endian format and returns the value.
 size_t read_bytes(std::vector<uint8_t>& buffer, uint32_t offset, uint8_t size) {
     size_t val = 0;
 
@@ -10,6 +17,7 @@ size_t read_bytes(std::vector<uint8_t>& buffer, uint32_t offset, uint8_t size) {
     return val;
 }
 
+// Loads the ELF file through parsing, validating, and storing the contents of the file.
 uint32_t load_elf(const std::string& path, Machine& machine) {
     std::ifstream fin;
     std::vector<uint8_t> elf_buffer;
@@ -17,26 +25,30 @@ uint32_t load_elf(const std::string& path, Machine& machine) {
     elf_headers eh;
     program_headers ph;
 
+    // Checks to see if the filepath is valid and can be opened in binary.
     fin.open(path, std::ios::binary);
-
     if (!fin.is_open()) {
         fatal_error("Invalid ELF path.");
     }
 
+    // Gets the size of the file.
     fin.seekg(0, std::ios::end);
     std::streamsize size = fin.tellg();
     if (size < 0) {
         fatal_error("Invalid ELF size.");
     }
-
     fin.seekg(0, std::ios::beg);
+
+    // Resizes the file buffer and reads ELF bytes into the buffer.
     elf_buffer.resize(size);
     fin.read(reinterpret_cast<char*>(elf_buffer.data()), size);
 
+    // Checks to see if file input stream has read all the ELF file contents.
     if (fin.gcount() != size) {
         fatal_error("Short ELF read.");
     }
 
+    // Parses through ELF buffer to assign ELF headers their respective values.
     eh.e_bitsize = read_bytes(elf_buffer, static_cast<uint32_t>(4), 1);
     eh.e_endian = read_bytes(elf_buffer, static_cast<uint32_t>(5), 1);
     eh.e_filever = read_bytes(elf_buffer, static_cast<uint32_t>(6), 1);
@@ -56,6 +68,8 @@ uint32_t load_elf(const std::string& path, Machine& machine) {
     eh.e_shnum = read_bytes(elf_buffer, static_cast<uint32_t>(48), 2);
     eh.e_shstrndx = read_bytes(elf_buffer, static_cast<uint32_t>(50), 2);
 
+    // Validates that ELF file has correct magic bytes, is an executable type, is specified for
+    // RISC-V, and has the correct bitsize (32-bit).
     if (elf_buffer[0] != 0x7f || elf_buffer[1] != 'E' || elf_buffer[2] != 'L' || elf_buffer[3] != 'F') {
         fatal_error("Invalid ELF magic bytes.");
     } else if (eh.e_type != 2) {
@@ -66,6 +80,7 @@ uint32_t load_elf(const std::string& path, Machine& machine) {
         fatal_error("Invalid bitsize per ELF.");
     }
 
+    // Parses through all program headers indicated by ELF header e_phnum.
     for (uint32_t i = 0; i < eh.e_phnum; i++) {
         ph.p_type = read_bytes(elf_buffer, eh.e_phoff + (i * eh.e_phentsize), 4);
         ph.p_offset = read_bytes(elf_buffer, eh.e_phoff + (i * eh.e_phentsize) + 4, 4);
@@ -76,24 +91,30 @@ uint32_t load_elf(const std::string& path, Machine& machine) {
         ph.p_flags = read_bytes(elf_buffer, eh.e_phoff + (i * eh.e_phentsize) + 24, 4);
         ph.p_align = read_bytes(elf_buffer, eh.e_phoff + (i * eh.e_phentsize) + 28, 4);
 
+        // If the type is not a loadable type, skip it.
         if (ph.p_type != 1) continue;
 
+        // Checks to see if virtual address in memory is within range/in-bounds.
         if (static_cast<uint64_t>(ph.p_vaddr) + ph.p_memsz > machine.getMemorySize()) {
             fatal_error("Out-of-range virtual address");
         }
 
+        // Copies file size amount of bytes into RAM.
         for (uint32_t j = 0; j < ph.p_filesz; j++) {
             machine.write(ph.p_vaddr + j, 1, read_bytes(elf_buffer, ph.p_offset + j, 1));
         }
 
+        // Zero-fills RAM if program header memory size is greater than file size.
         if (ph.p_memsz > ph.p_filesz) {
             for (uint32_t k = 0; k < (ph.p_memsz - ph.p_filesz); k++) {
                 machine.write(ph.p_vaddr + ph.p_filesz + k, 1, 0);
             }
         }
 
+        // Stores the loaded program header.
         ph_store.push_back(ph);
     }
 
+    // Returns the memory address of the starting instruction.
     return eh.e_entry;
 }
