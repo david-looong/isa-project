@@ -19,9 +19,7 @@
 struct elf_headers {
     uint32_t e_bitsize;
     uint32_t e_endian;
-    uint32_t e_filever;
     uint32_t e_osabi;
-    uint32_t e_abiver;
     uint32_t e_type;
     uint32_t e_machine;
     uint32_t e_version;
