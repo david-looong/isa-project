@@ -51,9 +51,7 @@ uint32_t load_elf(const std::string& path, Machine& machine) {
     // Parses through ELF buffer to assign ELF headers their respective values.
     eh.e_bitsize = read_bytes(elf_buffer, static_cast<uint32_t>(4), 1);
     eh.e_endian = read_bytes(elf_buffer, static_cast<uint32_t>(5), 1);
-    eh.e_filever = read_bytes(elf_buffer, static_cast<uint32_t>(6), 1);
     eh.e_osabi = read_bytes(elf_buffer, static_cast<uint32_t>(7), 1);
-    eh.e_abiver = read_bytes(elf_buffer, static_cast<uint32_t>(8), 1);
     eh.e_type = read_bytes(elf_buffer, static_cast<uint32_t>(16), 2);
     eh.e_machine = read_bytes(elf_buffer, static_cast<uint32_t>(18), 2);
     eh.e_version = read_bytes(elf_buffer, static_cast<uint32_t>(20), 4);
