@@ -26,14 +26,14 @@ int main(int argc, char* argv[]) {
         resolved = parse_config(cli_map["f"]);
     }
 
+    // Checks if the input ELF file is specified in the command line.
+    if (resolved.find("i") == resolved.end()) {
+        fatal_error("Input ELF file not specified.");
+    }
+
     // Overwrites the configuration file values with the command line arguments if they are present.
     for (std::map<std::string,std::string>::iterator it = cli_map.begin(); it != cli_map.end(); it++) {
         resolved[it->first] = it->second;
-    }
-
-    // Checks if the input ELF file is specified in the resolved configuration.
-    if (resolved.find("i") == resolved.end()) {
-        fatal_error("Input ELF file not specified.");
     }
 
     // Converts the resolved map into a Config object.
