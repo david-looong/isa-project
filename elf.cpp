@@ -34,7 +34,7 @@ uint32_t load_elf(const std::string& path, Machine& machine) {
     // Gets the size of the file.
     fin.seekg(0, std::ios::end);
     std::streamsize size = fin.tellg();
-    if (size < 0) {
+    if (size <= 0 || size < 52) {
         fatal_error("Invalid ELF size.");
     }
     fin.seekg(0, std::ios::beg);
@@ -80,6 +80,23 @@ uint32_t load_elf(const std::string& path, Machine& machine) {
         fatal_error("Invalid bitsize per ELF.");
     }
 
+    // Extra malformed file checking (out-of-bounds entry point, incorrect endian flag, invalid
+    // OS target, incorrec header version).
+    if (eh.e_entry >= machine.getMemorySize()) {
+        fatal_error("Out-of-bounds entry point address.");
+    } else if (eh.e_endian != 1) {
+        fatal_error("Incorrect endian flag.");
+    } else if (eh.e_osabi != 0) {
+        fatal_error("Invalid OS target.");
+    } else if (eh.e_version != 1) {
+        fatal_error("Incorrect header version.");
+    }
+
+    // Checks if program header offset is out-of-bounds with program header bytes.
+    if (static_cast<uint64_t>(eh.e_phoff) + (eh.e_phnum * eh.e_phentsize) > static_cast<uint64_t>(size)) {
+        fatal_error("Out-of-range program header offset.");
+    }
+
     // Parses through all program headers indicated by ELF header e_phnum.
     for (uint32_t i = 0; i < eh.e_phnum; i++) {
         ph.p_type = read_bytes(elf_buffer, eh.e_phoff + (i * eh.e_phentsize), 4);
@@ -94,9 +111,14 @@ uint32_t load_elf(const std::string& path, Machine& machine) {
         // If the type is not a loadable type, skip it.
         if (ph.p_type != 1) continue;
 
-        // Checks to see if virtual address in memory is within range/in-bounds.
+        // Checks to see if virtual address in memory is within range/in-bounds, if program data
+        // offset is within bounds, and if file size is greater than memory size.
         if (static_cast<uint64_t>(ph.p_vaddr) + ph.p_memsz > machine.getMemorySize()) {
-            fatal_error("Out-of-range virtual address");
+            fatal_error("Out-of-range virtual address.");
+        } else if (static_cast<uint64_t>(ph.p_offset) + ph.p_filesz > static_cast<uint64_t>(size)) {
+            fatal_error("Out-of-range program data start.");
+        } else if (ph.p_filesz > ph.p_memsz) {
+            fatal_error("Program header file size is greater than memory size.");
         }
 
         // Copies file size amount of bytes into RAM.

@@ -27,7 +27,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Checks if the input ELF file is specified in the command line.
-    if (resolved.find("i") == resolved.end()) {
+    if (cli_map.find("i") == cli_map.end()) {
         fatal_error("Input ELF file not specified.");
     }
 
