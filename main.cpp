@@ -10,8 +10,10 @@
 #include "hart.hpp"
 #include "config.hpp"
 #include "sign_extend.hpp"
+#include "elf.hpp"
 #include <iostream>
 #include <vector>
+#include <map>
 
 int main(int argc, char* argv[]) {
     // Parses the command line arguments and stores them into a map.
@@ -29,16 +31,23 @@ int main(int argc, char* argv[]) {
         resolved[it->first] = it->second;
     }
 
+    if (resolved.find("i") == resolved.end()) {
+        fatal_error("Input ELF file not specified.");
+    }
+
     // Converts the resolved map into a Config object.
     Config final_config = value_conversion(resolved);
 
     Machine machine = Machine(final_config.mem);
     std::vector<Hart> harts = {};
 
+    uint32_t entry = load_elf(resolved["i"], machine);
+
     // Creates a Hart object for each hart specified in the configuration and prints out the contents of
     // each Hart's registers, program counter, and Csrs.
     for (uint32_t i = 0; i < final_config.harts; i++) {
         harts.push_back(Hart(machine, i, final_config.mmu));
+        harts[i].set_pc(entry);
         std::cout << "***********************" << std::endl;
         std::cout << "HART " << i << " CONTENTS" << std::endl;
         std::cout << "***********************" << std::endl;
