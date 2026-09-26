@@ -50,6 +50,10 @@ void Csr::write(uint32_t num, uint32_t val) {
     return;
 }
 
+void Csr::increment_instret() {
+    instret += 1;
+}
+
 // Returns the value of the program counter.
 uint32_t Hart::get_pc() {
     return pc;
@@ -64,6 +68,10 @@ void Hart::set_pc(uint32_t val) {
 // Returns the value of a Csr.
 uint32_t Hart::get_csr(uint32_t num) {
     return csrs.read(num);
+}
+
+void Hart::increment_instret() {
+    return csrs.increment_instret();
 }
 
 // Returns the value of a Hart's register.
@@ -84,4 +92,8 @@ uint32_t Hart::read_memory(uint32_t addr, uint8_t size) {
 // Overwrites a Hart's memory at a given address with a new value.
 void Hart::write_memory(uint32_t addr, uint8_t size, uint32_t value) {
     return m.write(addr, size, value);
+}
+
+uint32_t Hart::get_memory_size() {
+    return m.getMemorySize();
 }
