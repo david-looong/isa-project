@@ -1,3 +1,4 @@
 *.elf
 *.txt
 CLAUDE.md
+check*/check_*_notes.md
