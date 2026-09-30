@@ -48,7 +48,7 @@ int main(int argc, char* argv[]) {
     // Creates a Hart object for each hart specified in the configuration, sets the PC, and
     // prints out the contents of each Hart's registers, program counter, and Csrs.
     for (uint32_t i = 0; i < final_config.harts; i++) {
-        harts.push_back(Hart(machine, i, final_config.mmu));
+        harts.push_back(Hart(machine, i, final_config.mmu, final_config.bp, final_config.bpD));
         harts[i].set_pc(entry);
         std::cout << "***********************" << std::endl;
         std::cout << "HART " << i << " CONTENTS" << std::endl;

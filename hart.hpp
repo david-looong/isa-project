@@ -15,6 +15,7 @@
 #include <string>
 #include "machine.hpp"
 #include "register_file.hpp"
+#include "branch_predictor.hpp"
 
 class Csr {
     private:
@@ -41,14 +42,13 @@ class Csr {
 class Hart {
     private:
         Csr csrs;
-
         uint32_t pc;
-
         RegisterFile rf;
-
         Machine &m;
+        BranchPredictor bp;
+
     public:
-        Hart(Machine &machine, uint32_t hart_id, bool mmu) : csrs(hart_id, mmu), pc(0), rf(RegisterFile()), m(machine) {}
+        Hart(Machine &machine, uint32_t hart_id, bool mmu, uint32_t bp, uint32_t bpd) : csrs(hart_id, mmu), pc(0), rf(RegisterFile()), m(machine), bp(bp, bpd) {}
         uint32_t get_pc();
         void set_pc(uint32_t val);
         uint32_t get_csr(uint32_t num);
