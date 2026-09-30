@@ -50,6 +50,7 @@ void Csr::write(uint32_t num, uint32_t val) {
     return;
 }
 
+// Increases the executed instructions counter by one.
 void Csr::increment_instret() {
     instret += 1;
 }
@@ -70,6 +71,7 @@ uint32_t Hart::get_csr(uint32_t num) {
     return csrs.read(num);
 }
 
+// Increases the executed instructions counter by one.
 void Hart::increment_instret() {
     return csrs.increment_instret();
 }
@@ -94,6 +96,7 @@ void Hart::write_memory(uint32_t addr, uint8_t size, uint32_t value) {
     return m.write(addr, size, value);
 }
 
+// Returns the size of RAM.
 uint32_t Hart::get_memory_size() {
     return m.getMemorySize();
 }

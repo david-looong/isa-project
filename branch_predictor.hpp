@@ -1,3 +1,12 @@
+/* Name: David Long
+ * Date: September 30, 2026
+ * Synopsis: This header file contains a branch predictor class and branch entry
+ * struct. The class contains the branch prediction table as well as functions
+ * for returning and updating target predictions. Each entry in the table is a
+ * branch entry struct object, which includes the PC, 2-bit branch, and a valid
+ * entry flag.
+ */
+
 #ifndef BRANCH_PREDICTOR_HPP
 #define BRANCH_PREDICTOR_HPP
 

@@ -1,3 +1,9 @@
+/* Name: David Long
+ * Date: September 30, 2026
+ * Synopsis: This header file contains a declaration for a fetch function that
+ * returns an instruction structure.
+ */
+
 #ifndef FETCH_HPP
 #define FETCH_HPP
 
