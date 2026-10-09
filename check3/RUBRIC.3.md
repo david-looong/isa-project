@@ -26,11 +26,11 @@ Does the Part III code compile and is the fetch stage factored into its own sour
 **File(s)/line(s) for verification:**
 -
 - main.cpp (Entire file)
-- Build.md (Entire file)
+- README.3.md (Entire file)
 - fetch.hpp (Entire file)
 - fetch.cpp (Entire file)
 
-**Justification:** I've completed all criteria in this category for earning full points. If you refer to my Build.md file, there are instructions in there for how to compile all my files and run it in order to print out some information. Since no decoding/executing has been implemented yet, I can't show much with the fetching. The fetch stage can be found in fetch.hpp/.cpp, separate from the rest of the code. Every header used is from the C++ standard library.
+**Justification:** I've completed all criteria in this category for earning full points. If you refer to my README.3.md file, there are instructions in there for how to compile all my files and run it in order to print out some information. Since no decoding/executing has been implemented yet, I can't show much with the fetching. The fetch stage can be found in fetch.hpp/.cpp, separate from the rest of the code. Every header used is from the C++ standard library.
 
 
 ---
