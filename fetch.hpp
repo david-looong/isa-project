@@ -9,7 +9,7 @@
 
 #include "instruction.hpp"
 #include "hart.hpp"
-#include "config.hpp"
+#include "error.hpp"
 #include <cstdint>
 
 Instruction fetch(Hart& hart);

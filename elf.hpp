@@ -14,7 +14,7 @@
 #include <fstream>
 #include <iostream>
 #include "machine.hpp"
-#include "config.hpp"
+#include "error.hpp"
 
 struct elf_headers {
     uint32_t e_bitsize;

@@ -74,12 +74,6 @@ std::unordered_map<std::string, std::function<void(Config&, const std::string&, 
     {"tlbE", change_enum_eviction}
 };
 
-// Handles fatal errors by printing the error message and exiting the program.
-void fatal_error(std::string error) {
-    std::cerr << "Fatal error: " << error << std::endl;
-    std::exit(1);
-}
-
 // Skips switches that are not members of the Config struct.
 bool skip_valid(const std::string& val) {
     return true;

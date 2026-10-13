@@ -19,6 +19,7 @@
 #include <functional>
 #include <vector>
 #include <algorithm>
+#include "error.hpp"
 
 // Enum classes for categorical-type command line switches.
 enum class CacheType {dm, sa, fa};
@@ -104,9 +105,6 @@ struct Config {
     // TLB eviction policy
     EvictionPolicy tlbE = EvictionPolicy::lru;
 };
-
-// Fatal error function
-void fatal_error(std::string error);
 
 // Validation functions
 bool skip_valid(const std::string& val);
