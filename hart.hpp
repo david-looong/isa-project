@@ -17,6 +17,8 @@
 #include "register_file.hpp"
 #include "branch_predictor.hpp"
 
+enum class ParkReason { Running, System, AmoStore, Load, Fetch, IllegalInstruction, Access };
+
 class Csr {
     private:
         uint32_t mhartid;
@@ -46,9 +48,11 @@ class Hart {
         RegisterFile rf;
         Machine &m;
         BranchPredictor bp;
+        bool parked;
+        ParkReason pr;
 
     public:
-        Hart(Machine &machine, uint32_t hart_id, bool mmu, uint32_t bp, uint32_t bpd) : csrs(hart_id, mmu), pc(0), rf(RegisterFile()), m(machine), bp(bp, bpd) {}
+        Hart(Machine &machine, uint32_t hart_id, bool mmu, uint32_t bp, uint32_t bpd) : csrs(hart_id, mmu), pc(0), rf(RegisterFile()), m(machine), bp(bp, bpd), parked(false), pr(ParkReason::Running) {}
         uint32_t get_pc();
         void set_pc(uint32_t val);
         uint32_t get_csr(uint32_t num);
@@ -58,6 +62,8 @@ class Hart {
         uint32_t read_memory(uint32_t addr, uint8_t size);
         void write_memory(uint32_t addr, uint8_t size, uint32_t value);
         uint32_t get_memory_size();
+        void park(ParkReason reason);
+        bool is_parked();
 
 };
 

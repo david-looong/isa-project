@@ -11,7 +11,8 @@ Instruction fetch(Hart& hart) {
 
     // Bounds-checking to see if fetch would go past RAM.
     if (hart.get_memory_size() < (static_cast<uint64_t>(hart.get_pc()) + 4)) {
-        fatal_error("Out-of-bounds fetch.");
+        hart.park(ParkReason::Access);
+        return i;
     }
 
     // Reads the instruction, increments the executable instruction counter, and

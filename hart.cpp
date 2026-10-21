@@ -100,3 +100,15 @@ void Hart::write_memory(uint32_t addr, uint8_t size, uint32_t value) {
 uint32_t Hart::get_memory_size() {
     return m.getMemorySize();
 }
+
+// Sets the status of a Hart to parked and stores the reason as well.
+void Hart::park(ParkReason reason) {
+    pr = reason;
+    parked = true;
+    return;
+}
+
+// Returns if a Hart is parked or not.
+bool Hart::is_parked() {
+    return parked;
+}
