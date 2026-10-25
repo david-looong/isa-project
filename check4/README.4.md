@@ -14,6 +14,7 @@
 - `decode.cpp` (the decode stage)
 - `sign_extend.hpp` (Header, doesn't need to be included in compiling)
 - `instruction.hpp` (Header, doesn't need to be included in compiling)
+- `pipeline_object.hpp` (Header, doesn't need to be included in compiling)
 
 ## Compiling with g++
 

@@ -155,7 +155,7 @@ Handles the encoding-specific semantics for LUI, AUIPC, JAL, and JALR.
 | F3 | JALR mis-decoded as J-type (or its target computed PC-relative instead of rs1-relative). | -1.0 |
 | F4 | Two or more of LUI/AUIPC/JAL/JALR handled incorrectly, OR their PC-relative setup is absent. | -1.5 |
 
-**Self-assessed step:** 1.5
+**Self-assessed step:** F1
 
 **Points claimed:** 1.5
 
@@ -163,7 +163,7 @@ Handles the encoding-specific semantics for LUI, AUIPC, JAL, and JALR.
 -
 - decode.hpp (Line 27)
 - decode.cpp (Lines 17-18, 308-332, 346-360)
-- pipeline_object.hpp (Entier file)
+- pipeline_object.hpp (Entire file)
 
 **Justification:** I've completed all criteria in this category for earning full points. JALR instructions are assigned the I enum value for I-type instructions in the opcode lookup table. LUI and AUIPC are correctly handled with their special-case values in the operands; PC is correct as it is the PC associated with the instruction on the rising edge thanks to a pipeline object I've built for every HART. JAL is also assigned the J enum type for J-type instructions in the opcode lookup table, and the immediate is stored to be added to the PC later on.
 
