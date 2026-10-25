@@ -112,3 +112,8 @@ void Hart::park(ParkReason reason) {
 bool Hart::is_parked() {
     return parked;
 }
+
+// Returns the reason for a parked HART.
+ParkReason Hart::get_pr() {
+    return pr;
+}

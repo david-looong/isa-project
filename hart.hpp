@@ -64,6 +64,7 @@ class Hart {
         uint32_t get_memory_size();
         void park(ParkReason reason);
         bool is_parked();
+        ParkReason get_pr();
 
 };
 

@@ -11,6 +11,8 @@
 #include "config.hpp"
 #include "sign_extend.hpp"
 #include "elf.hpp"
+#include "fetch.hpp"
+#include "decode.hpp"
 #include <iostream>
 #include <vector>
 #include <map>
@@ -41,29 +43,53 @@ int main(int argc, char* argv[]) {
 
     Machine machine = Machine(final_config.mem);
     std::vector<Hart> harts = {};
+    std::vector<HartPipelineObject> hpos = {};
 
     // Loads the ELF file into the machine's memory and retrieves the entry point address.
     uint32_t entry = load_elf(resolved["i"], machine);
 
-    // Creates a Hart object for each hart specified in the configuration, sets the PC, and
-    // prints out the contents of each Hart's registers, program counter, and Csrs.
+    // Creates a Hart object for each hart specified in the configuration and sets the PC.
     for (uint32_t i = 0; i < final_config.harts; i++) {
         harts.push_back(Hart(machine, i, final_config.mmu, final_config.bp, final_config.bpD));
         harts[i].set_pc(entry);
-        std::cout << "***********************" << std::endl;
-        std::cout << "HART " << i << " CONTENTS" << std::endl;
-        std::cout << "***********************" << std::endl;
-        for (uint32_t j = 0; j < static_cast<uint32_t>(32); j++) {
-            std::cout << "Register x" << j << " for Hart " << i << ": " << harts[i].read_register(j) << std::endl;
+        hpos.push_back(HartPipelineObject());
+    }
+
+    // Single-threaded clock loop
+    uint32_t tick_limit = 10000;
+    uint32_t num_ticks = 0;
+    uint32_t active_harts;
+
+    while (num_ticks < tick_limit) {
+        // If there are no more active HARTs, stop the loop.
+        active_harts = harts.size();
+        for (uint32_t i = 0; i < harts.size(); i++) {
+            if (harts[i].is_parked())   active_harts--;
         }
-        std::cout << "Program Counter for Hart " << i << ": " << harts[i].get_pc() << std::endl;
-        std::cout << "mhartid for Hart " << i << ": " << harts[i].get_csr(0xF14) << std::endl;
-        std::cout << "satp for Hart " << i << ": " << harts[i].get_csr(0x180) << std::endl;
-        std::cout << "time for Hart " << i << ": " << harts[i].get_csr(0xC01) << std::endl;
-        std::cout << "timeh for Hart " << i << ": " << harts[i].get_csr(0xC81) << std::endl;
-        std::cout << "cycle for Hart " << i << ": " << harts[i].get_csr(0xC00) << std::endl;
-        std::cout << "cycleh for Hart " << i << ": " << harts[i].get_csr(0xC80) << std::endl;
-        std::cout << "instret for Hart " << i << ": " << harts[i].get_csr(0xC02) << std::endl;
-        std::cout << "instreth for Hart " << i << ": " << harts[i].get_csr(0xC82) << std::endl;
+        if (active_harts == 0)  break;
+
+        // Do all rising edge phases of each stage in the instruction pipeline per HART.
+        for (uint32_t i = 0; i < harts.size(); i++) {
+            fetch_rising_edge(harts[i], hpos[i]);
+            decode_rising_edge(harts[i], hpos[i], final_config.m, final_config.a);
+        }
+
+        // Do all falling edge phases of each stage in the instruction pipeline per HART.
+        for (uint32_t i = 0; i < harts.size(); i++) {
+            fetch_falling_edge(harts[i], hpos[i]);
+            decode_falling_edge(harts[i], hpos[i]);
+        }
+
+        num_ticks++;
+    }
+
+    // Prints out information on each HART.
+    for (uint32_t i = 0; i < harts.size(); i++) {
+        std::cout << std::dec << "Hart " << i << ":" << std::endl;
+        std::cout << "Is parked? " << harts[i].is_parked() << std::endl;
+        std::cout << "Park Reason: " << static_cast<uint32_t>(harts[i].get_pr()) << std::endl;
+        std::cout << "Program Counter: " << std::hex << harts[i].get_pc() << std::endl;
+        std::cout << "Current Decode/Execute Instruction: " << hpos[i].id_ex_current.i.inst << std::endl;
+        std::cout << "Current Decode/Execute PC: " << hpos[i].id_ex_current.pc << std::endl;
     }
 }

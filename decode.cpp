@@ -1,0 +1,390 @@
+/* Name: David Long
+ * Date: October 21, 2026
+ * Synopsis: This CPP files contains the contents of the previously declared functions
+ * in decode.hpp as well as an opcode lookup table for assigning instruction types.
+ */
+
+#include "decode.hpp"
+
+// Constructs an opcode lookup table for acceptable/illegal instruction types.
+std::array<InstType, 128> build_opcode_table() {
+    std::array<InstType, 128> table;
+    std::fill(std::begin(table), std::end(table), InstType::Illegal);
+
+    table[0b0000011] = InstType::I;
+    table[0b0100011] = InstType::S;
+    table[0b1100011] = InstType::B;
+    table[0b1100111] = InstType::I;
+    table[0b1101111] = InstType::J;
+    table[0b0010011] = InstType::I;
+    table[0b0110011] = InstType::R;
+    table[0b1110011] = InstType::I;
+    table[0b0010111] = InstType::U;
+    table[0b0110111] = InstType::U;
+    table[0b0101111] = InstType::R;
+
+    return table;
+}
+
+// Initializes the opcode lookup table.
+const std::array<InstType, 128> opcode_table = build_opcode_table();
+
+// Returns the instruction type of the opcode based on the opcode lookup table.
+InstType classify_opcode(uint8_t opcode) {
+    return opcode_table[opcode & 0x7F];
+}
+
+// Extracts different field members based on the instruction type.
+std::tuple<uint32_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t> field_extraction(uint32_t inst, InstType type) {
+    uint32_t immediate = 0;
+    uint8_t sign_bit_index = 0;
+    uint8_t rd = 0;
+    uint8_t funct3 = 0;
+    uint8_t rs1 = 0;
+    uint8_t rs2 = 0;
+    uint8_t funct7 = 0;
+
+    switch (type) {
+        // R-type instruction field extraction.
+        case InstType::R:
+            immediate = 0;
+            sign_bit_index = 0;
+            rd = (inst & 0xF80) >> 7;
+            funct3 = (inst & 0x7000) >> 12;
+            rs1 = (inst & 0xF8000) >> 15;
+            rs2 = (inst & 0x1F00000) >> 20;
+            funct7 = (inst & 0xFE000000) >> 25;
+            break;
+        // I-type field extraction. If the opcode is a SYSTEM opcode, the field
+        // extraction resembles that more of an R-type instruction.
+        case InstType::I:
+            rd = (inst & 0xF80) >> 7;
+            funct3 = (inst & 0x7000) >> 12;
+            rs1 = (inst & 0xF8000) >> 15;
+
+            if ((inst & 0x7F) == 0b1110011) {
+                immediate = (inst & 0xFFF00000) >> 20;
+                sign_bit_index = 31;
+                rs2 = (inst & 0x1F00000) >> 20;
+                funct7 = (inst & 0xFE000000) >> 25;
+            } else {
+                immediate = (inst & 0xFFF00000) >> 20;
+                sign_bit_index = 11;
+                rs2 = 0;
+                funct7 = 0;
+            }
+            break;
+        // S-type instruction field extraction.
+        case InstType::S:
+            immediate = ((inst & 0xFE000000) >> 20) | ((inst & 0xF80) >> 7);
+            sign_bit_index = 11;
+            rd = 0;
+            funct3 = (inst & 0x7000) >> 12;
+            rs1 = (inst & 0xF8000) >> 15;
+            rs2 = (inst & 0x1F00000) >> 20;
+            funct7 = 0;
+            break;
+        // B-type instruction field extraction.
+        case InstType::B:
+            immediate = ((inst & 0x80000000) >> 19) | ((inst & 0x7E000000) >> 20) | ((inst & 0xF00) >> 7) | ((inst & 0x80) << 4);
+            sign_bit_index = 12;
+            rd = 0;
+            funct3 = (inst & 0x7000) >> 12;
+            rs1 = (inst & 0xF8000) >> 15;
+            rs2 = (inst & 0x1F00000) >> 20;
+            funct7 = 0;
+            break;
+        // U-type instruction field extraction.
+        case InstType::U:
+            immediate = inst & 0xFFFFF000;
+            sign_bit_index = 31;
+            rd = (inst & 0xF80) >> 7;
+            funct3 = 0;
+            rs1 = 0;
+            rs2 = 0;
+            funct7 = 0;
+            break;
+        // J-type instruction field extraction
+        case InstType::J:
+            immediate = ((inst & 0x80000000) >> 11) | ((inst & 0x7FE00000) >> 20) | ((inst & 0x100000) >> 9) | (inst & 0xFF000);
+            sign_bit_index = 20;
+            rd = (inst & 0xF80) >> 7;
+            funct3 = 0;
+            rs1 = 0;
+            rs2 = 0;
+            funct7 = 0;
+            break;
+        default:
+            break;
+    }
+
+    // Returns the extracted fields, including the sign-extended immediate value.
+    return {sign_extend(immediate, sign_bit_index), rd, funct3, rs1, rs2, funct7};
+}
+
+// Returns the ALU operation associated with the opcode plus the extracted field values.
+std::optional<AluOp> aluop_decode(uint8_t opcode, uint8_t funct3, uint8_t funct7, uint8_t rd, uint8_t rs1, uint8_t srai_bit, uint32_t immediate, bool m, bool a) {
+    switch (opcode) {
+        // LOAD instructions are forced to ADD.
+        case 0b0000011:
+            return AluOp::Add;
+        // STORE instructions are forced to ADD.
+        case 0b0100011:
+            return AluOp::Add;
+        // BRANCH instructions are forced to SUB.
+        case 0b1100011:
+            return AluOp::Sub;
+        // JALR instructions are treated as I-type instructions, so they use ADD.
+        case 0b1100111:
+            return AluOp::Add;
+        // JAL instructions don't use the ALU, so ADD is a placeholder.
+        case 0b1101111:
+            return AluOp::Add;
+        // OP_IMM instructions have a variety of different ALU operations based on
+        // the funct3 value.
+        case 0b0010011: {
+            // ADDI, SLLI, SLTI, SLTIU, XORI, SRLI, ORI, ANDI
+            std::array<std::optional<AluOp>, 8> aluop_imm_table = {
+                AluOp::Add, AluOp::LeftShift, AluOp::Sub, AluOp::Sub,
+                AluOp::Xor, AluOp::RightShiftL, AluOp::Or, AluOp::And
+            };
+            std::optional<AluOp> aluop_imm = aluop_imm_table[funct3];
+
+            // A special case for SRAI.
+            if (funct3 == 0b101 && srai_bit == 1) {
+                aluop_imm = AluOp::RightShiftA;
+            }
+            
+            return aluop_imm;
+        }
+        // OP instructions have a variety of different ALU operations based on the
+        // funct3 (and possibly funct7) value(s).
+        case 0b0110011: {
+            // ADD, SLL, SLT, SLTU, XOR, SRL, OR, AND
+            std::array<std::optional<AluOp>, 8> aluop_table = {
+                AluOp::Add, AluOp::LeftShift, AluOp::Sub, AluOp::Sub,
+                AluOp::Xor, AluOp::RightShiftL, AluOp::Or, AluOp::And
+            };
+            std::optional<AluOp> aluop = aluop_table[funct3];
+
+            // If the m flag is turned on and funct7 is 1, then we can use multiply
+            // and division ALU operations.
+            if (m && funct7 == 0x1) {
+                switch(funct3) {
+                    case 0x0: // MUL
+                        aluop = AluOp::Mul;
+                        break;
+                    case 0x1: // MULH
+                        aluop = AluOp::Mul;
+                        break;
+                    case 0x2: // MULHSU
+                        aluop = AluOp::Mul;
+                        break;
+                    case 0x3: // MULHU
+                        aluop = AluOp::Mul;
+                        break;
+                    case 0x4: // DIV
+                        aluop = AluOp::Div;
+                        break;
+                    case 0x5: // DIVU
+                        aluop = AluOp::DivU;
+                        break;
+                    case 0x6: // REM
+                        aluop = AluOp::Rem;
+                        break;
+                    case 0x7: // REMU
+                        aluop = AluOp::RemU;
+                        break;
+                }
+            } else if (!m && funct7 == 0x1) {
+                return std::nullopt;
+            }
+
+            // SUB and SRA instructions can also be utilized.
+            if (funct3 == 0b000 && funct7 == 0x20) {
+                aluop = AluOp::Sub;
+            } else if (funct3 == 0b101 && funct7 == 0x20) {
+                aluop = AluOp::RightShiftA;
+            }
+
+            return aluop;
+        }
+        // SYSTEM instructions only have consideration for SFENCE.VMA at the moment.
+        case 0b1110011: {
+            if (funct3 == 0 && rd == 0 && funct7 == 0b0001001) {                // SFENCE.VMA
+                return AluOp::Add;
+            } else if (funct3 == 0 && rd == 0 && rs1 == 0 && immediate == 0) {  // ECALL
+                return AluOp::Add;
+            } else if (funct3 != 0b100 && funct3 != 0b000) {                    // CSRs
+                return AluOp::Add;
+            } else {
+                return std::nullopt;
+            }
+        }
+        // AUIPC instructions use ADD.
+        case 0b0010111:
+            return AluOp::Add;
+        // LUI insrtuctions use ADD.
+        case 0b0110111:
+            return AluOp::Add;
+        // AMO instructions are ADD for the memory address. Only if the a flag is turned on.
+        case 0b0101111: {
+            if (a && funct3 == 0x2) {
+                switch ((funct7 & 0x7C) >> 2) {
+                    case 0b00010: // LR.W
+                        return AluOp::Add;
+                    case 0b00011: // SC.W
+                        return AluOp::Add;
+                    case 0b00001: // AMOSWAP.W
+                        return AluOp::Add;
+                    case 0b00000: // AMOADD.W
+                        return AluOp::Add;
+                    case 0b00100: // AMOXOR.W
+                        return AluOp::Add;
+                    case 0b01100: // AMOAND.W
+                        return AluOp::Add;
+                    case 0b01000: // AMOOR.W
+                        return AluOp::Add;
+                    case 0b10000: // AMOMIN.W
+                        return AluOp::Add;
+                    case 0b10100: // AMOMAX.W
+                        return AluOp::Add;
+                    case 0b11000: // AMOMINU.W
+                        return AluOp::Add;
+                    case 0b11100: // AMOMAXU.W
+                        return AluOp::Add;
+                    default:
+                        return std::nullopt;
+                }
+            } else {
+                return std::nullopt;
+            }
+        }
+        default:
+            return std::nullopt;
+    }
+}
+
+// Breaks down the fetched instruction and builds the Instruction struct.
+Latch decode(Hart& hart, Latch fetched, bool m, bool a) {
+    // If the instruction happens to be EBREAK, set it to a NOP.
+    if (fetched.i.inst == 0x00100073) {
+        fetched.i.inst = 0x00000013;
+    }
+    
+    // Determines the type of instruction. If illegal, the HART is parked and decode stops.
+    InstType type = classify_opcode(fetched.i.inst & 0x7F);
+    if (type == InstType::Illegal) {
+        hart.park(ParkReason::IllegalInstruction);
+        return fetched;
+    }
+
+    // Extracts all field members based on instruction type. Fills in Instruction.rd field.
+    auto [immediate, rd, funct3, rs1, rs2, funct7] = field_extraction(fetched.i.inst, type);
+    fetched.i.rd = rd;
+
+    // Determines the ALU operation associated with the instruction. If it's illegal, the HART
+    // is parked and decode stops. Otherwise, the Instruction.aluop field is filled.
+    std::optional<AluOp> aluop = aluop_decode(fetched.i.inst & 0x7F, funct3, funct7, rd, rs1, (fetched.i.inst & 0x40000000) >> 30, immediate, m, a);
+    if (aluop == std::nullopt) {
+        hart.park(ParkReason::IllegalInstruction);
+        return fetched;
+    }
+    fetched.i.aluop = static_cast<uint8_t>(*aluop);
+
+    // Fills the rest of the Instruction struct fields based on instruction type.
+    switch (type) {
+        // For R-type instructions, both operands come from the register file. If it is
+        // an atomic instruction, store the value to combine with for later.
+        case InstType::R:
+            if ((fetched.i.inst & 0x7F) == 0b0101111) {
+                fetched.i.left = hart.read_register(rs1);
+                fetched.i.disp = hart.read_register(rs2);
+            } else {
+                fetched.i.left = hart.read_register(rs1);
+                fetched.i.right = hart.read_register(rs2);
+            }
+            break;
+        // For I-type instructions, the left operand comes from the register file, and
+        // the right operand comes from the 12-bit immediate encoded in the instruction.
+        case InstType::I:
+            // In the event the instruction is a CSR immediate instruction, the left operand is
+            // the unsigned immediate located in the rs1 field.
+            if ((fetched.i.inst & 0x7F) == 0b1110011 && (funct3 == 0b101 || funct3 == 0b110 || funct3 == 0b111)) {
+                fetched.i.left = rs1;
+            } else {
+                fetched.i.left = hart.read_register(rs1);
+            }
+
+            // If the ALU operation is either SLL, SRL, or SRA, the shamt value is the right
+            // operand. If the opcode matches the SYSTEM opcode, two things can occur: if the
+            // funct3 value is 0, store another value from the register file; otherwise, it's
+            // a CSR instruction and the right operand should be 0.
+            if (aluop == AluOp::LeftShift || aluop == AluOp::RightShiftL || aluop == AluOp::RightShiftA) {
+                fetched.i.right = (fetched.i.inst & 0x1F00000) >> 20;
+            } else if ((fetched.i.inst & 0x7F) == 0b1110011 && funct3 == 0b000) {
+                fetched.i.disp = hart.read_register(rs2);
+            } else if ((fetched.i.inst & 0x7F) == 0b1110011 && funct3 != 0b000) {
+                fetched.i.right = 0;
+            } else {
+                fetched.i.right = immediate;
+            }
+            break;
+        // The S-type instruction needs to use a register value plus an offset, and the
+        // value of that needs to be stored comes from the register file.
+        case InstType::S:
+            fetched.i.left = hart.read_register(rs1);
+            fetched.i.right = immediate;
+            fetched.i.disp = hart.read_register(rs2);
+            break;
+        // The B-type instruction acts like SLT, but the result decides what's added to the PC.
+        case InstType::B:
+            fetched.i.left = hart.read_register(rs1);
+            fetched.i.right = hart.read_register(rs2);
+            fetched.i.disp = immediate;
+            break;
+        // The AUIPC instruction adds the upper immediate to the PC of the AUIPC itself.
+        // The LUI instruction adds the upper immediate to the value 0.
+        case InstType::U:
+            if ((fetched.i.inst & 0x7F) == 0b0010111) {
+                fetched.i.left = fetched.pc;
+                fetched.i.right = immediate;
+            } else if ((fetched.i.inst & 0x7F) == 0b0110111) {
+                fetched.i.left = 0;
+                fetched.i.right = immediate;
+            }
+            break;
+        // The J-type instruction adds the sign-extended 21-bit immediate to the PC.
+        case InstType::J:
+            fetched.i.disp = immediate;
+            break;
+        default:
+            break;
+    }
+
+    return fetched;
+}
+
+// Rising edge for the decode stage of the instruction pipeline.
+void decode_rising_edge(Hart& hart, HartPipelineObject& hpo, bool m, bool a) {
+    // Does nothing is HART is parked.
+    if (hart.is_parked()) {
+        return;
+    }
+
+    // Decodes current fetched instruction and saves it for execute stage.
+    hpo.id_ex_next = decode(hart, hpo.if_id_current, m, a);
+    return;
+}
+
+// Falling edge for the decode stage of the instruction pipeline.
+void decode_falling_edge(Hart& hart, HartPipelineObject& hpo) {
+    // Does nothing if HART is parked.
+    if (hart.is_parked()) {
+        return;
+    }
+
+    // Sets decoded instruction up for execute stage.
+    hpo.id_ex_current = hpo.id_ex_next;
+    return;
+}
