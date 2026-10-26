@@ -26,3 +26,6 @@ This repository contains all source files required to run the project as well as
 
 ## Build Instructions
 TBD!
+
+## AI Disclosure
+I utilized two models from Anthropic via Claude Code to assist me throughout this project: Sonnet 5 and Opus 5.5. These models were only used for having high-level discussions on design decisions and generating test case suites for each checkpoint.
