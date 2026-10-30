@@ -127,10 +127,12 @@ std::optional<AluOp> aluop_decode(uint8_t opcode, uint8_t funct3, uint8_t funct7
     switch (opcode) {
         // LOAD instructions are forced to ADD.
         case 0b0000011:
-            return AluOp::Add;
+            if (funct3 == 0b011 || funct3 == 0b110 || funct3 == 0b111)   return std::nullopt; 
+            else                                                                            return AluOp::Add;
         // STORE instructions are forced to ADD.
         case 0b0100011:
-            return AluOp::Add;
+            if (funct3 > 0b010)     return std::nullopt;
+            else                return AluOp::Add;
         // BRANCH instructions are forced to SUB.
         case 0b1100011:
             return AluOp::Sub;
@@ -300,6 +302,9 @@ Latch decode(Hart& hart, Latch fetched, bool m, bool a) {
             if ((fetched.i.inst & 0x7F) == 0b0101111) {
                 fetched.i.left = hart.read_register(rs1);
                 fetched.i.disp = hart.read_register(rs2);
+
+                if (((funct7 & 0x7C) >> 2) == 0b00010)  fetched.i.memop = 0b011;
+                else                                    fetched.i.memop = 0b111;
             } else {
                 fetched.i.left = hart.read_register(rs1);
                 fetched.i.right = hart.read_register(rs2);
@@ -329,6 +334,11 @@ Latch decode(Hart& hart, Latch fetched, bool m, bool a) {
             } else {
                 fetched.i.right = immediate;
             }
+
+            if ((fetched.i.inst & 0x7F) == 0b0000011 && (funct3 == 0b000 || funct3 == 0b100))       fetched.i.memop = 0b001;
+            else if ((fetched.i.inst & 0x7F) == 0b0000011 && (funct3 == 0b001 || funct3 == 0b101))  fetched.i.memop = 0b010;
+            else if ((fetched.i.inst & 0x7F) == 0b0000011 && funct3 == 0b010)                       fetched.i.memop = 0b011;
+
             break;
         // The S-type instruction needs to use a register value plus an offset, and the
         // value of that needs to be stored comes from the register file.
@@ -336,6 +346,11 @@ Latch decode(Hart& hart, Latch fetched, bool m, bool a) {
             fetched.i.left = hart.read_register(rs1);
             fetched.i.right = immediate;
             fetched.i.disp = hart.read_register(rs2);
+
+            if (funct3 == 0b000)        fetched.i.memop = 0b101;
+            else if (funct3 == 0b001)   fetched.i.memop = 0b110;
+            else if (funct3 == 0b010)   fetched.i.memop = 0b111;
+
             break;
         // The B-type instruction acts like SLT, but the result decides what's added to the PC.
         case InstType::B:
