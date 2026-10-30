@@ -382,7 +382,7 @@ Latch decode(Hart& hart, Latch fetched, bool m, bool a) {
 
 // Rising edge for the decode stage of the instruction pipeline.
 void decode_rising_edge(Hart& hart, HartPipelineObject& hpo, bool m, bool a) {
-    // Does nothing is HART is parked.
+    // Does nothing if HART is parked.
     if (hart.is_parked()) {
         return;
     }
