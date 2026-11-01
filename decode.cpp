@@ -127,15 +127,16 @@ std::optional<AluOp> aluop_decode(uint8_t opcode, uint8_t funct3, uint8_t funct7
     switch (opcode) {
         // LOAD instructions are forced to ADD.
         case 0b0000011:
-            if (funct3 == 0b011 || funct3 == 0b110 || funct3 == 0b111)   return std::nullopt; 
-            else                                                                            return AluOp::Add;
+            if (funct3 == 0b011 || funct3 == 0b110 || funct3 == 0b111)  return std::nullopt; 
+            else                                                        return AluOp::Add;
         // STORE instructions are forced to ADD.
         case 0b0100011:
-            if (funct3 > 0b010)     return std::nullopt;
+            if (funct3 > 0b010) return std::nullopt;
             else                return AluOp::Add;
         // BRANCH instructions are forced to SUB.
         case 0b1100011:
-            return AluOp::Sub;
+            if (funct3 != 0b010 && funct3 != 0b011) return AluOp::Sub;
+            else                                    return std::nullopt;
         // JALR instructions are treated as I-type instructions, so they use ADD.
         case 0b1100111:
             return AluOp::Add;
