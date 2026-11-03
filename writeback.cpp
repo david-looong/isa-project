@@ -1,6 +1,7 @@
 #include "writeback.hpp"
 
-void writeback_rising_edge(Hart &hart, HartPipelineObject &hpo) {
+void writeback_rising_edge(Hart&, HartPipelineObject &hpo) {
+
     hpo.wb_register = hpo.mem_wb_current.i.rd;
     hpo.wb_register_value = hpo.mem_wb_current.i.result;
     return;

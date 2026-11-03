@@ -13,9 +13,10 @@
 struct Latch {
     Instruction i;
     uint32_t pc = 0;
-    bool illegal = false;
+    ParkReason fault = ParkReason::Running;
     uint8_t rs1 = 0;
     uint8_t rs2 = 0;
+    uint32_t predicted_next_pc = 0;
 };
 
 struct HartPipelineObject {
@@ -27,11 +28,14 @@ struct HartPipelineObject {
     Latch ex_mem_next;
     Latch mem_wb_current;
     Latch mem_wb_next;
-    bool taken;
+    bool redirect;
     bool id_ex_current_ready;
-    uint32_t target;
+    bool branch_resolved_tick;
+    uint32_t redirect_pc;
     uint8_t wb_register = 0;
     uint32_t wb_register_value = 0;
+    uint32_t recorded_branch_pc;
+    uint8_t recorded_branch_outcome;
 
     HartPipelineObject() {
         if_id_current.i.inst = 0x00000013;
@@ -42,9 +46,12 @@ struct HartPipelineObject {
         ex_mem_next.i.inst = 0x00000013;
         mem_wb_current.i.inst = 0x00000013;
         mem_wb_next.i.inst = 0x00000013;
-        taken = false;
+        redirect = false;
         id_ex_current_ready = true;
-        target = 0;
+        branch_resolved_tick = false;
+        redirect_pc = 0;
+        recorded_branch_pc = 0;
+        recorded_branch_outcome = 0;
     }
 };
 

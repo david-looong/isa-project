@@ -39,6 +39,7 @@ class Csr {
         uint32_t read(uint32_t num);
         void write(uint32_t num, uint32_t val);
         void increment_instret();
+        void increment_cycle();
 };
 
 class Hart {
@@ -65,7 +66,9 @@ class Hart {
         void park(ParkReason reason);
         bool is_parked();
         ParkReason get_pr();
-
+        uint8_t get_bp_predict(uint32_t branch_pc);
+        void update_bp(uint32_t branch_pc, uint8_t outcome);
+        void increment_csr_cycle();
 };
 
 #endif // HART_HPP

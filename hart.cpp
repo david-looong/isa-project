@@ -53,6 +53,12 @@ void Csr::write(uint32_t num, uint32_t val) {
 // Increases the executed instructions counter by one.
 void Csr::increment_instret() {
     instret += 1;
+    return;
+}
+
+void Csr::increment_cycle() {
+    cycle += 1;
+    return;
 }
 
 // Returns the value of the program counter.
@@ -116,4 +122,20 @@ bool Hart::is_parked() {
 // Returns the reason for a parked HART.
 ParkReason Hart::get_pr() {
     return pr;
+}
+
+// Returns branch prediction.
+uint8_t Hart::get_bp_predict(uint32_t branch_pc) {
+    return bp.predict(branch_pc);
+}
+
+// Updates branch prediction table with new target.
+void Hart::update_bp(uint32_t branch_pc, uint8_t outcome) {
+    bp.update(branch_pc, outcome);
+    return;
+}
+
+void Hart::increment_csr_cycle() {
+    csrs.increment_cycle();
+    return;
 }
