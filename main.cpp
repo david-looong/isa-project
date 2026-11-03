@@ -13,6 +13,9 @@
 #include "elf.hpp"
 #include "fetch.hpp"
 #include "decode.hpp"
+#include "execute.hpp"
+#include "memory.hpp"
+#include "writeback.hpp"
 #include <iostream>
 #include <vector>
 #include <map>
@@ -72,12 +75,18 @@ int main(int argc, char* argv[]) {
         for (uint32_t i = 0; i < harts.size(); i++) {
             fetch_rising_edge(harts[i], hpos[i]);
             decode_rising_edge(harts[i], hpos[i], final_config.m, final_config.a);
+            execute_rising_edge(harts[i], hpos[i]);
+            memory_rising_edge(harts[i], hpos[i]);
+            writeback_rising_edge(harts[i], hpos[i]);
         }
 
         // Do all falling edge phases of each stage in the instruction pipeline per HART.
         for (uint32_t i = 0; i < harts.size(); i++) {
             fetch_falling_edge(harts[i], hpos[i]);
             decode_falling_edge(harts[i], hpos[i]);
+            execute_falling_edge(harts[i], hpos[i]);
+            memory_falling_edge(harts[i], hpos[i]);
+            writeback_falling_edge(harts[i], hpos[i]);
         }
 
         num_ticks++;
