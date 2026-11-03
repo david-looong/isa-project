@@ -13,6 +13,9 @@
 struct Latch {
     Instruction i;
     uint32_t pc = 0;
+    bool illegal = false;
+    uint8_t rs1 = 0;
+    uint8_t rs2 = 0;
 };
 
 struct HartPipelineObject {
@@ -24,6 +27,11 @@ struct HartPipelineObject {
     Latch ex_mem_next;
     Latch mem_wb_current;
     Latch mem_wb_next;
+    bool taken;
+    bool id_ex_current_ready;
+    uint32_t target;
+    uint8_t wb_register = 0;
+    uint32_t wb_register_value = 0;
 
     HartPipelineObject() {
         if_id_current.i.inst = 0x00000013;
@@ -34,6 +42,9 @@ struct HartPipelineObject {
         ex_mem_next.i.inst = 0x00000013;
         mem_wb_current.i.inst = 0x00000013;
         mem_wb_next.i.inst = 0x00000013;
+        taken = false;
+        id_ex_current_ready = true;
+        target = 0;
     }
 };
 
