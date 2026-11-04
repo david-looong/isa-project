@@ -36,6 +36,7 @@ struct HartPipelineObject {
     uint32_t wb_register_value = 0;
     uint32_t recorded_branch_pc;
     uint8_t recorded_branch_outcome;
+    uint8_t drain_ticks_left;
 
     HartPipelineObject() {
         if_id_current.i.inst = 0x00000013;
@@ -52,6 +53,7 @@ struct HartPipelineObject {
         redirect_pc = 0;
         recorded_branch_pc = 0;
         recorded_branch_outcome = 0;
+        drain_ticks_left = 2;
     }
 };
 

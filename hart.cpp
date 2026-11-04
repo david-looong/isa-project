@@ -56,6 +56,7 @@ void Csr::increment_instret() {
     return;
 }
 
+// Increments the cycle counter of a Csr.
 void Csr::increment_cycle() {
     cycle += 1;
     return;
@@ -135,6 +136,7 @@ void Hart::update_bp(uint32_t branch_pc, uint8_t outcome) {
     return;
 }
 
+// Increments the cycle counter of a Csr.
 void Hart::increment_csr_cycle() {
     csrs.increment_cycle();
     return;

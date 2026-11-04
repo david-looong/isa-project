@@ -1,10 +1,9 @@
 /* Name: David Long
  * Date: September 16, 2026
- * Synopsis: This header file yields a Hart and Csr class. The Csr class contains
- * the eight Csr registers and declares a constructor and read/write functions. The
- * Hart class contains a program counter, stack pointer, a Csr object, a RegisterFile
- * object, and a reference to a Machine object. The class declares a constructor, 
- * getter functions for the program counter and Csrs, and a read register function.
+ * Synopsis: This header file yields a Hart and Csr class as well as a ParkReason enum
+ * class. Each class has functions that get/set values within the class, with the Hart class
+ * possessing its own register file, branch prediction table, reference to the machine, and
+ * Csrs.
  */
 
 #ifndef HART_HPP

@@ -7,9 +7,12 @@
 #include "branch_predictor.hpp"
 
 uint8_t BranchPredictor::predict(uint32_t pc) {
-    // Returns the default prediction is the table has now rows, if the PC-relative index
-    // doesn't have a valid branch entry, or if the PC doesn't match the PC at that index.
-    if (bp_rows == 0 || !branch_target_buffer[pc % bp_rows].valid || branch_target_buffer[pc % bp_rows].tag != pc) {
+    // Returns not taken if branch prediction is disabled. Otherwise, if the PC-relative index
+    // doesn't have a valid branch entry, or if the PC doesn't match the PC at that index, it
+    // returns the default prediction value established by config.
+    if (bp_rows == 0) {
+        return 0;
+    } else if (!branch_target_buffer[pc % bp_rows].valid || branch_target_buffer[pc % bp_rows].tag != pc) {
         return static_cast<uint8_t>(default_prediction);
     }
     
@@ -18,7 +21,7 @@ uint8_t BranchPredictor::predict(uint32_t pc) {
 }
 
 void BranchPredictor::update(uint32_t pc, uint8_t outcome) {
-    // There's nothing to update if the table has no entries.
+    // There's nothing to update if branch prediction is disabled.
     if (bp_rows == 0)   return;
     
     // Updates PC, 2-bit state, and entry validity if no entry is found or if the PCs don't match.
