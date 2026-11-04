@@ -9,11 +9,11 @@
 
 #include "instruction.hpp"
 #include "hart.hpp"
-#include "error.hpp"
 #include "pipeline_object.hpp"
+#include "decode.hpp"
 #include <cstdint>
 
-Instruction fetch(Hart& hart);
+Instruction fetch(Hart& hart, HartPipelineObject& hpo);
 void fetch_rising_edge(Hart& hart, HartPipelineObject& hpo);
 void fetch_falling_edge(Hart& hart, HartPipelineObject& hpo);
 
