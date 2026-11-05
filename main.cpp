@@ -1,8 +1,6 @@
 /* Name: David Long
  * Date: September 18, 2026
- * Synopsis: This CPP file contains the driver code for Part 1 of the project. It parses the command
- * line arguments and configuration file, creates a Machine object, and creates a vector of Hart objects.
- * It then prints out the contents of each Hart's registers, program counter, and Csrs.
+ * Synopsis: This CPP file contains the driver code for the ISA project.
  */
 
 #include "machine.hpp"
@@ -64,10 +62,10 @@ int main(int argc, char* argv[]) {
     uint32_t active_harts;
 
     while (num_ticks < tick_limit) {
-        // If there are no more active HARTs, stop the loop.
+        // If there are no more active HARTs (i.e., the HART is parked and all older instructions have been resolved), stop the loop.
         active_harts = harts.size();
         for (uint32_t i = 0; i < harts.size(); i++) {
-            if (harts[i].is_parked())   active_harts--;
+            if (harts[i].is_parked() && hpos[i].drain_ticks_left == 0)  active_harts--;
         }
         if (active_harts == 0)  break;
 
@@ -87,6 +85,11 @@ int main(int argc, char* argv[]) {
             execute_falling_edge(harts[i], hpos[i]);
             memory_falling_edge(harts[i], hpos[i]);
             writeback_falling_edge(harts[i], hpos[i]);
+        }
+
+        // Keep count of whether any instruction older than a faulted instruction has finished.
+        for (uint32_t i = 0; i < harts.size(); i++) {
+            if (harts[i].is_parked() && hpos[i].drain_ticks_left > 0)  hpos[i].drain_ticks_left--;
         }
 
         num_ticks++;
