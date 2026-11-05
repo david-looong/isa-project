@@ -1,3 +1,9 @@
+/* Name: David Long
+ * Date: November 4, 2026
+ * Synopsis: This header files contains the rising edge and falling edge function
+ * declarations for the writeback stage of the instruction pipeline.
+ * */
+
 #ifndef WRITEBACK_HPP
 #define WRITEBACK_HPP
 
