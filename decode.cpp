@@ -139,7 +139,8 @@ std::optional<AluOp> aluop_decode(uint8_t opcode, uint8_t funct3, uint8_t funct7
             else                                    return std::nullopt;
         // JALR instructions are treated as I-type instructions, so they use ADD.
         case 0b1100111:
-            return AluOp::Add;
+            if (funct3 == 0b000)    return AluOp::Add;
+            else                    return std::nullopt;
         // JAL instructions don't use the ALU, so ADD is a placeholder.
         case 0b1101111:
             return AluOp::Add;
@@ -274,11 +275,13 @@ Latch decode(Hart& hart, Latch fetched, bool m, bool a) {
     if (fetched.i.inst == 0x00100073) {
         fetched.i.inst = 0x00000013;
     }
+
+    uint8_t opcode = fetched.i.inst & 0x7F;
     
-    // Determines the type of instruction. If illegal, the HART is parked and decode stops.
-    InstType type = classify_opcode(fetched.i.inst & 0x7F);
+    // Determines the type of instruction. If illegal, the per-HART latch is flagged as so.
+    InstType type = classify_opcode(opcode);
     if (type == InstType::Illegal) {
-        hart.park(ParkReason::IllegalInstruction);
+        if (fetched.fault == ParkReason::Running)   fetched.fault = ParkReason::IllegalInstruction;
         return fetched;
     }
 
@@ -286,11 +289,20 @@ Latch decode(Hart& hart, Latch fetched, bool m, bool a) {
     auto [immediate, rd, funct3, rs1, rs2, funct7] = field_extraction(fetched.i.inst, type);
     fetched.i.rd = rd;
 
-    // Determines the ALU operation associated with the instruction. If it's illegal, the HART
-    // is parked and decode stops. Otherwise, the Instruction.aluop field is filled.
-    std::optional<AluOp> aluop = aluop_decode(fetched.i.inst & 0x7F, funct3, funct7, rd, rs1, (fetched.i.inst & 0x40000000) >> 30, immediate, m, a);
+    // Sets the register sources for the instruction. If it is a particular Csr instruction
+    // (CSRRW, CSRRS, CSRRC), only one register source is saved.
+    if (opcode == 0b1110011 && (funct3 != 0 && funct3 != 0b100)) {
+        if (funct3 <= 0b011)    fetched.rs1 = rs1;
+    } else {
+        fetched.rs1 = rs1;
+        fetched.rs2 = rs2;
+    }
+
+    // Determines the ALU operation associated with the instruction. If it's illegal, the per-HART
+    // latch is flagged as so and decode stops. Otherwise, the Instruction.aluop field is filled.
+    std::optional<AluOp> aluop = aluop_decode(opcode, funct3, funct7, rd, rs1, (fetched.i.inst & 0x40000000) >> 30, immediate, m, a);
     if (aluop == std::nullopt) {
-        hart.park(ParkReason::IllegalInstruction);
+        if (fetched.fault == ParkReason::Running)   fetched.fault = ParkReason::IllegalInstruction;
         return fetched;
     }
     fetched.i.aluop = static_cast<uint8_t>(*aluop);
@@ -300,7 +312,7 @@ Latch decode(Hart& hart, Latch fetched, bool m, bool a) {
         // For R-type instructions, both operands come from the register file. If it is
         // an atomic instruction, store the value to combine with for later.
         case InstType::R:
-            if ((fetched.i.inst & 0x7F) == 0b0101111) {
+            if ((opcode) == 0b0101111) {
                 fetched.i.left = hart.read_register(rs1);
                 fetched.i.disp = hart.read_register(rs2);
 
@@ -316,7 +328,7 @@ Latch decode(Hart& hart, Latch fetched, bool m, bool a) {
         case InstType::I:
             // In the event the instruction is a CSR immediate instruction, the left operand is
             // the unsigned immediate located in the rs1 field.
-            if ((fetched.i.inst & 0x7F) == 0b1110011 && (funct3 == 0b101 || funct3 == 0b110 || funct3 == 0b111)) {
+            if ((opcode) == 0b1110011 && (funct3 == 0b101 || funct3 == 0b110 || funct3 == 0b111)) {
                 fetched.i.left = rs1;
             } else {
                 fetched.i.left = hart.read_register(rs1);
@@ -328,17 +340,17 @@ Latch decode(Hart& hart, Latch fetched, bool m, bool a) {
             // a CSR instruction and the right operand should be 0.
             if (aluop == AluOp::LeftShift || aluop == AluOp::RightShiftL || aluop == AluOp::RightShiftA) {
                 fetched.i.right = (fetched.i.inst & 0x1F00000) >> 20;
-            } else if ((fetched.i.inst & 0x7F) == 0b1110011 && funct3 == 0b000) {
+            } else if ((opcode) == 0b1110011 && funct3 == 0b000) {
                 fetched.i.disp = hart.read_register(rs2);
-            } else if ((fetched.i.inst & 0x7F) == 0b1110011 && funct3 != 0b000) {
+            } else if ((opcode) == 0b1110011 && funct3 != 0b000) {
                 fetched.i.right = 0;
             } else {
                 fetched.i.right = immediate;
             }
 
-            if ((fetched.i.inst & 0x7F) == 0b0000011 && (funct3 == 0b000 || funct3 == 0b100))       fetched.i.memop = 0b001;
-            else if ((fetched.i.inst & 0x7F) == 0b0000011 && (funct3 == 0b001 || funct3 == 0b101))  fetched.i.memop = 0b010;
-            else if ((fetched.i.inst & 0x7F) == 0b0000011 && funct3 == 0b010)                       fetched.i.memop = 0b011;
+            if ((opcode) == 0b0000011 && (funct3 == 0b000 || funct3 == 0b100))       fetched.i.memop = 0b001;
+            else if ((opcode) == 0b0000011 && (funct3 == 0b001 || funct3 == 0b101))  fetched.i.memop = 0b010;
+            else if ((opcode) == 0b0000011 && funct3 == 0b010)                       fetched.i.memop = 0b011;
 
             break;
         // The S-type instruction needs to use a register value plus an offset, and the
@@ -362,10 +374,10 @@ Latch decode(Hart& hart, Latch fetched, bool m, bool a) {
         // The AUIPC instruction adds the upper immediate to the PC of the AUIPC itself.
         // The LUI instruction adds the upper immediate to the value 0.
         case InstType::U:
-            if ((fetched.i.inst & 0x7F) == 0b0010111) {
+            if ((opcode) == 0b0010111) {
                 fetched.i.left = fetched.pc;
                 fetched.i.right = immediate;
-            } else if ((fetched.i.inst & 0x7F) == 0b0110111) {
+            } else if ((opcode) == 0b0110111) {
                 fetched.i.left = 0;
                 fetched.i.right = immediate;
             }
@@ -388,8 +400,38 @@ void decode_rising_edge(Hart& hart, HartPipelineObject& hpo, bool m, bool a) {
         return;
     }
 
+    // Resets the instruction status to ready every tick
+    hpo.id_ex_current_ready = true;
+
     // Decodes current fetched instruction and saves it for execute stage.
     hpo.id_ex_next = decode(hart, hpo.if_id_current, m, a);
+
+    // Obtains the consumer's opcode, the producer's opcode, and whether or not the
+    // producer's instruction's result is ready to forward when the consumer reaches execute.
+    uint8_t opcode = hpo.id_ex_next.i.inst & 0x7F;
+    uint8_t prod_id_ex_current_opcode = hpo.id_ex_current.i.inst & 0x7F;
+    bool id_ex_current_val_ready = prod_id_ex_current_opcode != 0x2F && prod_id_ex_current_opcode != 0x73 && (hpo.id_ex_current.i.memop >= 0b100 || hpo.id_ex_current.i.memop == 0);
+
+    // Bypasses into register source 1 (rs1) if the instruction in writeback's falling edge writes to the
+    // register the consumer reads as rs1.
+    if (hpo.id_ex_next.rs1 == hpo.mem_wb_current.i.rd && hpo.mem_wb_current.i.rd != 0) {
+        hpo.id_ex_next.i.left = hpo.mem_wb_current.i.result;
+    }
+
+    // Bypasses into register source 2 (rs2) if the instruction in writeback's falling edge writes to the
+    // register the consumer reads as rs2. It can belong in either the disp field for stores, AMO/SC and
+    // SFENCE.VMA, or the right field for everything else.
+    if (hpo.id_ex_next.rs2 == hpo.mem_wb_current.i.rd && hpo.mem_wb_current.i.rd != 0) {
+        if (opcode == 0x23 || opcode == 0x2F || opcode == 0x73) hpo.id_ex_next.i.disp = hpo.mem_wb_current.i.result;
+        else                                                    hpo.id_ex_next.i.right = hpo.mem_wb_current.i.result;
+    }
+
+    // Determines whether the consumer needs a value from the instruction one ahead that won't be ready in time.
+    // If that's the case, a stall occurs.
+    if (!id_ex_current_val_ready && (hpo.id_ex_current.i.rd == hpo.id_ex_next.rs1 || hpo.id_ex_current.i.rd == hpo.id_ex_next.rs2) && hpo.id_ex_current.i.rd != 0) {
+        hpo.id_ex_current_ready = false;
+    }
+
     return;
 }
 
@@ -400,7 +442,14 @@ void decode_falling_edge(Hart& hart, HartPipelineObject& hpo) {
         return;
     }
 
-    // Sets decoded instruction up for execute stage.
-    hpo.id_ex_current = hpo.id_ex_next;
+    // If a branch redirect is indicated or the current execute value isn't ready, a NOP is set up for execute.
+    // Otherwise, we set the decoded instruction up for execute stage.
+    if (hpo.redirect || !hpo.id_ex_current_ready) {
+        hpo.id_ex_current = Latch();
+        hpo.id_ex_current.i.inst = 0x00000013;
+    } else {
+        hpo.id_ex_current = hpo.id_ex_next;
+    }
+
     return;
 }
