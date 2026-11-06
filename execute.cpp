@@ -91,7 +91,7 @@ void execute_rising_edge(Hart& hart, HartPipelineObject& hpo) {
     bool ex_mem_val_ready = prod_ex_mem_opcode != 0x2F && prod_ex_mem_opcode != 0x73 && (hpo.ex_mem_current.i.memop >= 0b100 || hpo.ex_mem_current.i.memop == 0);
 
     // Bypasses into register source 1 (rs1) if the instruction in memory's falling edge writes to the 
-    // register the consumer reads as rs1 and there isn't a stall. Otherwise, the bypass checks
+    // register the consumer reads as rs1 and the value is ready. Otherwise, the bypass checks
     // writeback's falling edge for the same behavior.
     if (hpo.ex_mem_next.rs1 == hpo.ex_mem_current.i.rd && hpo.ex_mem_current.i.rd != 0) {
         if (ex_mem_val_ready)   hpo.ex_mem_next.i.left = hpo.ex_mem_current.i.result;
@@ -100,7 +100,7 @@ void execute_rising_edge(Hart& hart, HartPipelineObject& hpo) {
     }
 
     // Bypasses into register source 2 (rs2) if the instruction in memory's falling edge writes to the 
-    // register the consumer reads as rs1 and there isn't a stall. Otherwise, the bypass checks
+    // register the consumer reads as rs2 and the value is ready. Otherwise, the bypass checks
     // writeback's falling edge for the same behavior. It can belong in either the disp field for stores, AMO/SC
     // and SFENCE.VMA, or the right field for everything else.
     if (hpo.ex_mem_next.rs2 == hpo.ex_mem_current.i.rd && hpo.ex_mem_current.i.rd != 0) {

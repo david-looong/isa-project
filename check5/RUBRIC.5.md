@@ -28,9 +28,9 @@ Does the Part V code compile and is the execute stage factored into its own sour
 - README.5.md (Entire file)
 - main.cpp (Entire file)
 - execute.hpp (Entire file)
-- execute.cpp (Entire files)
+- execute.cpp (Entire file)
 
-**Justification:** I've completed all criteria in this category for earning full points. If you refer to my README.5.md file, there are instructions in there for how to compile all my files and run it in order to print out some information. The execute stage can be found in execute.hpp/.cpp, separate from the rest of the code. Ever header used is from the C++ standard library.
+**Justification:** I've completed all criteria in this category for earning full points. If you refer to my README.5.md file, there are instructions in there for how to compile all my files and run it in order to print out some information. The execute stage can be found in execute.hpp/.cpp, separate from the rest of the code. Every header used is from the C++ standard library.
 
 
 ---
@@ -106,7 +106,7 @@ For LOAD and STORE, the ALU computes base + offset via ADD, independent of the i
 - 
 - decode.cpp (Lines 122, 127-135, 326-349, 357-362)
 - execute.hpp (Line 23)
-- execute.cpp (Lines 17-18, 116-117)
+- execute.cpp (Lines 17-18, 116-117, 181)
 - memory.cpp (Lines 25-26, 47-50)
 
 **Justification:** I've completed all criteria in this category for earning full points. My decode stage forces LOAD/STORE instructions to the ADD AluOp enum value, and later on determines their fields to ensure the left operand is the base register and the right operand is a sign-extended offset/immediate. The alu() function signature does not take in the instruction and only considers left/right/aluop. The computed address lands in result, which is used in the memory stage. strval (disp in my implementation) is left until STORE instructions dictate a write to RAM, in which case its value is utilized.
@@ -160,7 +160,7 @@ Detects the load-use hazard (which forwarding cannot cover) and stalls exactly o
 - decode.cpp (Lines 405, 414, 432-434, 448-453)
 - pipeline_object.hpp (Lines 32, 51)
 - fetch.cpp (Lines 61-72)
-- execute.cpp (Lines 96-97, 107-110)
+- execute.cpp (Lines 98-99, 111-113)
 
 **Justification:** I've completed all criteria in this category for earning full points. A no_stall flag is reset on every tick, and if the consumer in the decode stage needs a value from the instruction one stage ahead that won't be ready in time, a stall is indicated. The falling edge of the decode stage injects a bubble. On a stall tick in the fetch stage, the PC is never set and the setup for the decode stage never occurs either, indicative of a freeze. Forwarding from the MEM/WB latch does occur on the following cycle so the load value is used.
 
@@ -185,10 +185,11 @@ Resolves branches/jumps in the execute stage, compares against the fetch-stage p
 
 **File(s)/line(s) for verification:**
 - 
+- decode.cpp (Lines 448-453)
 - execute.cpp (Lines 125-147, 154-168, 194-197)
 - fetch.cpp (Lines 61-66)
 
-**Justification:** I've completed all criteria in this category for earning full points. Taken/not-taken values (recorded_branch_outcome) are computed for branches and JAL/JALR instructions as well as the targets (actual_next_pc). On a misprediction, the IF/ID latch is bubbled and the PC is redirected to the correct target. The branch rpedictor is updated with the new outcome. In the event of a correct prediction, no bubbling occurs.
+**Justification:** I've completed all criteria in this category for earning full points. Taken/not-taken values (recorded_branch_outcome) are computed for branches and forced for JAL/JALR instructions as well as the targets (actual_next_pc). On a misprediction, the IF/ID latch is bubbled and the PC is redirected to the correct target in the fetch stage, and the ID/EX latch is bubbled in the decode stage. The branch predictor is updated with the new outcome. In the event of a correct prediction, no bubbling occurs.
 
 
 ---
