@@ -14,9 +14,9 @@ void memory_rising_edge(Hart &hart, HartPipelineObject &hpo) {
 
     // Determines how to access memory depending on if it is a LOAD or STORE.
     if (hpo.mem_wb_next.i.memop <= 0b011 && hpo.mem_wb_next.i.memop != 0) {
-        // If there is a LOAD page fault, the HART is parked and the instruction is bubbled with a NOP.
+        // If there is a LOAD access fault, the HART is parked and the instruction is bubbled with a NOP.
         if ((static_cast<uint64_t>(hpo.mem_wb_next.i.result) + (1 << (hpo.mem_wb_next.i.memop - 1))) > hart.get_memory_size()) {
-            hart.park(ParkReason::Load);
+            hart.park(ParkReason::Access);
             hpo.mem_wb_next = Latch();
             hpo.mem_wb_next.i.inst = 0x00000013;
             return;
@@ -30,9 +30,9 @@ void memory_rising_edge(Hart &hart, HartPipelineObject &hpo) {
         if (funct3 == 0b000)        hpo.mem_wb_next.i.result = sign_extend(hpo.mem_wb_next.i.result, 7);
         else if (funct3 == 0b001)   hpo.mem_wb_next.i.result = sign_extend(hpo.mem_wb_next.i.result, 15);
     } else if (hpo.mem_wb_next.i.memop >= 0b101) {
-        // If there is a AMO/STORE page fault, the HART is parked and the instruction is bubbled with a NOP.
+        // If there is a AMO/STORE access fault, the HART is parked and the instruction is bubbled with a NOP.
         if ((static_cast<uint64_t>(hpo.mem_wb_next.i.result) + (1 << ((hpo.mem_wb_next.i.memop & 0b11) - 1))) > hart.get_memory_size()) {
-            hart.park(ParkReason::AmoStore);
+            hart.park(ParkReason::Access);
             hpo.mem_wb_next = Latch();
             hpo.mem_wb_next.i.inst = 0x00000013;
             return;
