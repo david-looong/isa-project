@@ -187,9 +187,9 @@ Resolves branches/jumps in the execute stage, compares against the fetch-stage p
 - 
 - decode.cpp (Lines 448-453)
 - execute.cpp (Lines 125-147, 154-168, 194-197)
-- fetch.cpp (Lines 61-66)
+- fetch.cpp (Lines 40-44, 61-66)
 
-**Justification:** I've completed all criteria in this category for earning full points. Taken/not-taken values (recorded_branch_outcome) are computed for branches and forced for JAL/JALR instructions as well as the targets (actual_next_pc). On a misprediction, the IF/ID latch is bubbled and the PC is redirected to the correct target in the fetch stage, and the ID/EX latch is bubbled in the decode stage. The branch predictor is updated with the new outcome. In the event of a correct prediction, no bubbling occurs.
+**Justification:** I've completed all criteria in this category for earning full points. Taken/not-taken values (recorded_branch_outcome) are computed for branches and forced for JAL/JALR instructions as well as the targets (actual_next_pc). Fetch does predict the next PC value for branches and JAL/JALR instructions. On a misprediction, the IF/ID latch is bubbled and the PC is redirected to the correct target in the fetch stage, and the ID/EX latch is bubbled in the decode stage. The branch predictor is updated with the new outcome. In the event of a correct prediction, no bubbling occurs.
 
 
 ---
