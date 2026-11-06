@@ -1,3 +1,9 @@
+/* Name: David Long
+ * Date: November 4, 2026
+ * Synopsis: This header file contains the rising edge and falling edge function
+ * declarations for the memory stage of the instruction pipeline.
+ * */
+
 #ifndef MEMORY_HPP
 #define MEMORY_HPP
 
