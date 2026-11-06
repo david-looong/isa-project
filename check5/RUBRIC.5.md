@@ -4,7 +4,7 @@
 
 **Date:** November 4, 2026
 
-
+**AI Disclosure:** Claude Opus 5.5 was utilized for discussion/decisions on high-level design decisions and creating test suites to test my code.
 
 ---
 
