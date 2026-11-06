@@ -64,7 +64,7 @@ void fetch_falling_edge(Hart& hart, HartPipelineObject& hpo) {
         hart.set_pc(hpo.redirect_pc);
         hart.increment_instret();
         hart.increment_csr_cycle();
-    } else if (hpo.id_ex_current_ready) {
+    } else if (hpo.no_stall) {
         hpo.if_id_current = hpo.if_id_next;
         hart.set_pc(hpo.if_id_next.predicted_next_pc);
         hart.increment_instret();

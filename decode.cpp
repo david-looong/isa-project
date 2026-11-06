@@ -348,6 +348,7 @@ Latch decode(Hart& hart, Latch fetched, bool m, bool a) {
                 fetched.i.right = immediate;
             }
 
+            // Determines the memop value based on the type of LOAD instruction.
             if ((opcode) == 0b0000011 && (funct3 == 0b000 || funct3 == 0b100))       fetched.i.memop = 0b001;
             else if ((opcode) == 0b0000011 && (funct3 == 0b001 || funct3 == 0b101))  fetched.i.memop = 0b010;
             else if ((opcode) == 0b0000011 && funct3 == 0b010)                       fetched.i.memop = 0b011;
@@ -401,7 +402,7 @@ void decode_rising_edge(Hart& hart, HartPipelineObject& hpo, bool m, bool a) {
     }
 
     // Resets the instruction status to ready every tick
-    hpo.id_ex_current_ready = true;
+    hpo.no_stall = true;
 
     // Decodes current fetched instruction and saves it for execute stage.
     hpo.id_ex_next = decode(hart, hpo.if_id_current, m, a);
@@ -429,7 +430,7 @@ void decode_rising_edge(Hart& hart, HartPipelineObject& hpo, bool m, bool a) {
     // Determines whether the consumer needs a value from the instruction one ahead that won't be ready in time.
     // If that's the case, a stall occurs.
     if (!id_ex_current_val_ready && (hpo.id_ex_current.i.rd == hpo.id_ex_next.rs1 || hpo.id_ex_current.i.rd == hpo.id_ex_next.rs2) && hpo.id_ex_current.i.rd != 0) {
-        hpo.id_ex_current_ready = false;
+        hpo.no_stall = false;
     }
 
     return;
@@ -444,7 +445,7 @@ void decode_falling_edge(Hart& hart, HartPipelineObject& hpo) {
 
     // If a branch redirect is indicated or the current execute value isn't ready, a NOP is set up for execute.
     // Otherwise, we set the decoded instruction up for execute stage.
-    if (hpo.redirect || !hpo.id_ex_current_ready) {
+    if (hpo.redirect || !hpo.no_stall) {
         hpo.id_ex_current = Latch();
         hpo.id_ex_current.i.inst = 0x00000013;
     } else {

@@ -29,7 +29,7 @@ struct HartPipelineObject {
     Latch mem_wb_current;
     Latch mem_wb_next;
     bool redirect;
-    bool id_ex_current_ready;
+    bool no_stall;
     bool branch_resolved_tick;
     uint32_t redirect_pc;
     uint8_t wb_register = 0;
@@ -48,7 +48,7 @@ struct HartPipelineObject {
         mem_wb_current.i.inst = 0x00000013;
         mem_wb_next.i.inst = 0x00000013;
         redirect = false;
-        id_ex_current_ready = true;
+        no_stall = true;
         branch_resolved_tick = false;
         redirect_pc = 0;
         recorded_branch_pc = 0;
