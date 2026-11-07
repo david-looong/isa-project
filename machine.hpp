@@ -11,14 +11,15 @@
 #include <cstdint>
 #include <memory>
 #include <vector>
+#include "memory_system.hpp"
 
 class Machine {
     private:
-        uint32_t mem_size;
-        std::unique_ptr<uint8_t[]> ram;
+        MemorySystem mem_system;
     public:
-        Machine(uint32_t mem_size) : mem_size(mem_size), ram(new uint8_t[this->mem_size]) {}
-        uint32_t getMemorySize();
+        Machine(uint32_t mem_size) : mem_system(mem_size) {}
+        uint32_t get_memory_size();
+        MemorySystemResult access(uint32_t vaddr, uint8_t size, AccessType type, uint32_t mhartid, uint32_t satp, uint32_t store_val, uint32_t amo_operand, AtomicOps op);
         uint32_t read(uint32_t addr, uint8_t size);
         void write(uint32_t addr, uint8_t size, uint32_t value);
 };

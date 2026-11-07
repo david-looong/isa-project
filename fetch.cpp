@@ -9,16 +9,10 @@
 Instruction fetch(Hart& hart, HartPipelineObject& hpo) {
     Instruction i;
 
-    // Bounds-checking to see if fetch would go past RAM. If so, hart_status is an Access fault.
-    if (hart.get_memory_size() < (static_cast<uint64_t>(hart.get_pc()) + 4)) {
-        hpo.if_id_next.fault = ParkReason::Access;
-        return i;
-    } else {
-        hpo.if_id_next.fault = ParkReason::Running;
-    }
-
-    // Reads the instruction.
-    i.inst = hart.read_memory(hart.get_pc(), 4);
+    // Reads the instruction and checks if an Access fault occurs.
+    MemorySystemResult result = hart.access(hart.get_pc(), 4, AccessType::Fetch);
+    i.inst = result.data;
+    hpo.if_id_next.fault = result.pr;
 
     return i;
 }

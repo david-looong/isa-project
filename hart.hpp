@@ -15,8 +15,7 @@
 #include "machine.hpp"
 #include "register_file.hpp"
 #include "branch_predictor.hpp"
-
-enum class ParkReason { Running, System, AmoStore, Load, Fetch, IllegalInstruction, Access };
+#include "memory_system.hpp"
 
 class Csr {
     private:
@@ -59,9 +58,7 @@ class Hart {
         void increment_instret();
         uint32_t read_register(uint32_t index);
         void write_register(uint32_t index, uint32_t value);
-        uint32_t read_memory(uint32_t addr, uint8_t size);
-        void write_memory(uint32_t addr, uint8_t size, uint32_t value);
-        uint32_t get_memory_size();
+        MemorySystemResult access(uint32_t vaddr, uint8_t size, AccessType type, uint32_t store_val = 0, uint32_t amo_operand = 0, AtomicOps op = AtomicOps::Swap);
         void park(ParkReason reason);
         bool is_parked();
         ParkReason get_pr();

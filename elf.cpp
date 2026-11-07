@@ -80,7 +80,7 @@ uint32_t load_elf(const std::string& path, Machine& machine) {
 
     // Extra malformed file checking (out-of-bounds entry point, incorrect endian flag, invalid
     // OS target, incorrec header version).
-    if (eh.e_entry >= machine.getMemorySize()) {
+    if (eh.e_entry >= machine.get_memory_size()) {
         fatal_error("Out-of-bounds entry point address.");
     } else if (eh.e_endian != 1) {
         fatal_error("Incorrect endian flag.");
@@ -111,7 +111,7 @@ uint32_t load_elf(const std::string& path, Machine& machine) {
 
         // Checks to see if virtual address in memory is within range/in-bounds, if program data
         // offset is within bounds, and if file size is greater than memory size.
-        if (static_cast<uint64_t>(ph.p_vaddr) + ph.p_memsz > machine.getMemorySize()) {
+        if (static_cast<uint64_t>(ph.p_vaddr) + ph.p_memsz > machine.get_memory_size()) {
             fatal_error("Out-of-range virtual address.");
         } else if (static_cast<uint64_t>(ph.p_offset) + ph.p_filesz > static_cast<uint64_t>(size)) {
             fatal_error("Out-of-range program data start.");

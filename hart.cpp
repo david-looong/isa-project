@@ -93,19 +93,12 @@ void Hart::write_register(uint32_t index, uint32_t value) {
     return rf.write(index, value);
 }
 
-// Returns the value of a Hart's memory at a given address.
-uint32_t Hart::read_memory(uint32_t addr, uint8_t size) {
-    return m.read(addr, size);
-}
+// Checks for RAM access faults and either reads from RAM or writes to RAM depending on the access type.
+MemorySystemResult Hart::access(uint32_t vaddr, uint8_t size, AccessType type, uint32_t store_val, uint32_t amo_operand, AtomicOps op) {
+    uint32_t id = csrs.read(0xF14);
+    uint32_t satp = csrs.read(0x180);
 
-// Overwrites a Hart's memory at a given address with a new value.
-void Hart::write_memory(uint32_t addr, uint8_t size, uint32_t value) {
-    return m.write(addr, size, value);
-}
-
-// Returns the size of RAM.
-uint32_t Hart::get_memory_size() {
-    return m.getMemorySize();
+    return m.access(vaddr, size, type, id, satp, store_val, amo_operand, op);
 }
 
 // Sets the status of a Hart to parked and stores the reason as well.

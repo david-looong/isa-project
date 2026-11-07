@@ -7,26 +7,22 @@
 #include "machine.hpp"
 
 // Returns the memory size of the machine.
-uint32_t Machine::getMemorySize() {
-    return mem_size;
+uint32_t Machine::get_memory_size() {
+    return mem_system.get_memory_size();
 }
+
+// Checks for RAM access faults and either reads from RAM or writes to RAM depending on the access type.
+MemorySystemResult Machine::access(uint32_t vaddr, uint8_t size, AccessType type, uint32_t mhartid, uint32_t satp, uint32_t store_val, uint32_t amo_operand, AtomicOps op) {
+    return mem_system.access(vaddr, size, type, mhartid, satp, store_val, amo_operand, op);
+}
+
 
 // Reads a byte, half, or word from RAM.
 uint32_t Machine::read(uint32_t addr, uint8_t size) {
-    uint32_t mem = 0;
-
-    for (uint8_t i = 0; i < size; i++) {
-        mem = mem | (ram[addr + i] << (i * 8));
-    }
-
-    return mem;
+    return mem_system.read(addr, size);
 }
 
 // Writes a byte, half, or word to RAM.
 void Machine::write(uint32_t addr, uint8_t size, uint32_t value) {
-    for (uint8_t i = 0; i < size; i++) {
-        ram[addr + i] = (value >> (i * 8)) & 0xFF;
-    }
-
-    return;
+    return mem_system.write(addr, size, value);
 }
