@@ -71,6 +71,9 @@ void execute_rising_edge(Hart& hart, HartPipelineObject& hpo) {
     hpo.redirect = false;
     hpo.branch_resolved_tick = false;
 
+    // If still ticks present in the memory hold, do nothing to protect forwarded operands.
+    if (hpo.mem_wait_current > 0)   return;
+
     // If the instruction has a fault, the HART is parked and execute stops.
     if (hpo.id_ex_current.fault != ParkReason::Running) {
         hart.park(hpo.id_ex_current.fault);
@@ -192,11 +195,11 @@ void execute_falling_edge(Hart& hart, HartPipelineObject& hpo) {
     }
 
     // If branch resolution is indicated, update the branch predictor table with the new branch outcome.
-    if (hpo.branch_resolved_tick) {
-        hart.update_bp(hpo.recorded_branch_pc, hpo.recorded_branch_outcome);
-    }
+    if (hpo.branch_resolved_tick)   hart.update_bp(hpo.recorded_branch_pc, hpo.recorded_branch_outcome);
 
-    // Sets executed instruction up for memory stage.
-    hpo.ex_mem_current = hpo.ex_mem_next;
+    // If there is a memory hold, hold the instruction. Otherwise, set the executed instruction up for
+    // the memory stage.
+    if (!hpo.mem_stall) hpo.ex_mem_current = hpo.ex_mem_next;
+
     return;
 }

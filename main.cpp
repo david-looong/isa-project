@@ -65,7 +65,7 @@ int main(int argc, char* argv[]) {
         // If there are no more active HARTs (i.e., the HART is parked and all older instructions have been resolved), stop the loop.
         active_harts = harts.size();
         for (uint32_t i = 0; i < harts.size(); i++) {
-            if (harts[i].is_parked() && hpos[i].drain_ticks_left == 0)  active_harts--;
+            if (harts[i].is_parked() && hpos[i].drain_ticks_left == 0 && hpos[i].mem_wait_current == 0) active_harts--;
         }
         if (active_harts == 0)  break;
 
