@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <unordered_map>
 #include <string>
+#include <chrono>
 #include "machine.hpp"
 #include "register_file.hpp"
 #include "branch_predictor.hpp"
@@ -38,6 +39,8 @@ class Csr {
         void write(uint32_t num, uint32_t val);
         void increment_instret();
         void increment_cycle();
+        bool is_csr_writable(uint32_t num);
+        bool does_csr_exist(uint32_t num);
 };
 
 class Hart {
@@ -55,6 +58,9 @@ class Hart {
         uint32_t get_pc();
         void set_pc(uint32_t val);
         uint32_t get_csr(uint32_t num);
+        void set_csr(uint32_t num, uint32_t val);
+        bool is_csr_writable(uint32_t num);
+        bool does_csr_exist(uint32_t num);
         void increment_instret();
         uint32_t read_register(uint32_t index);
         void write_register(uint32_t index, uint32_t value);

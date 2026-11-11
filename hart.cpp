@@ -29,8 +29,10 @@ uint32_t Csr::read(uint32_t num) {
     // Returns the value of the Csr.
     if (csr_entry == "mhartid")         return mhartid;
     else if (csr_entry == "satp")       return satp;
-    else if (csr_entry == "time")       return static_cast<uint32_t>(time);
-    else if (csr_entry == "timeh")      return static_cast<uint32_t>(time >> 32);
+    else if (csr_entry == "time")       return static_cast<uint32_t>(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(
+                                            std::chrono::system_clock::now().time_since_epoch()).count()));
+    else if (csr_entry == "timeh")      return static_cast<uint32_t>((static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(
+                                            std::chrono::system_clock::now().time_since_epoch()).count())) >> 32);
     else if (csr_entry == "cycle")      return static_cast<uint32_t>(cycle);
     else if (csr_entry == "cycleh")     return static_cast<uint32_t>(cycle >> 32);
     else if (csr_entry == "instret")    return static_cast<uint32_t>(instret);
@@ -62,6 +64,16 @@ void Csr::increment_cycle() {
     return;
 }
 
+// Determines if the CSR has write permissions.
+bool Csr::is_csr_writable(uint32_t num) {
+    return (csr_table.find(num) != csr_table.end() && (csr_table.find(num)->second == "mhartid" || csr_table.find(num)->second == "satp"));
+}
+
+// Determines if CSR actually exists.
+bool Csr::does_csr_exist(uint32_t num) {
+    return !(csr_table.find(num) == csr_table.end());
+}
+
 // Returns the value of the program counter.
 uint32_t Hart::get_pc() {
     return pc;
@@ -76,6 +88,21 @@ void Hart::set_pc(uint32_t val) {
 // Returns the value of a Csr.
 uint32_t Hart::get_csr(uint32_t num) {
     return csrs.read(num);
+}
+
+// Writes to CSR.
+void Hart::set_csr(uint32_t num, uint32_t val) {
+    return csrs.write(num, val);
+}
+
+// Determines if CSR is writable.
+bool Hart::is_csr_writable(uint32_t num) {
+    return csrs.is_csr_writable(num);
+}
+
+// Determines if CSR actually exists.
+bool Hart::does_csr_exist(uint32_t num) {
+    return csrs.does_csr_exist(num);
 }
 
 // Increases the executed instructions counter by one.
