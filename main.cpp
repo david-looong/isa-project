@@ -46,6 +46,7 @@ int main(int argc, char* argv[]) {
     Machine machine = Machine(final_config.mem,
         {   .cL = final_config.cL,
             .harts = final_config.harts,
+            .cC = final_config.cC,
             .c1_type = final_config.c1,
             .c2_type = final_config.c2,
             .c3_type = final_config.c3,

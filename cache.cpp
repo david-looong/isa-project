@@ -69,6 +69,22 @@ WritePolicy Cache::get_write_policy() {
     return write_policy;
 }
 
+// Returns the MESI state of a line record.
+Mesi Cache::get_state(uint64_t paddr) {
+    std::optional<uint32_t> line_hit = hit(paddr);
+    if (line_hit != std::nullopt) return cache[line_hit.value()].mesi;
+
+    return Mesi::I;
+}
+
+// Sets the MESI state of a line record.
+void Cache::set_state(uint64_t paddr, Mesi state) {
+    std::optional<uint32_t> line_hit = hit(paddr);
+    if (line_hit != std::nullopt) cache[line_hit.value()].mesi = state;
+
+    return;
+}
+
 // Determines if a hit or miss occurs in the cache.
 std::optional<uint32_t> Cache::hit(uint64_t paddr) {
     uint32_t set = get_set(paddr);
@@ -152,10 +168,11 @@ Victim Cache::install(uint64_t paddr, const std::vector<uint8_t> &bytes) {
     uint32_t victim_line = evict_line(get_set(paddr));
 
     // If there is a line record and it's marked dirty, save it for being moved elsewhere.
-    if (cache[victim_line].valid && cache[victim_line].dirty) {
+    if (cache[victim_line].valid) {
         victim.victim_addr = (cache[victim_line].tag * sets + get_set(paddr)) << block_num;
         victim.victim_bytes = cache[victim_line].data;
-        victim.is_dirty = true;
+        victim.was_valid = true;
+        if (cache[victim_line].dirty)   victim.is_dirty = true;
     }
 
     // Install the new line record where the victim was previously.
@@ -167,6 +184,50 @@ Victim Cache::install(uint64_t paddr, const std::vector<uint8_t> &bytes) {
     cache[victim_line].inserted = counter;
     cache[victim_line].last_used = counter;
     cache[victim_line].uses = 1;
+    cache[victim_line].mesi = Mesi::I;
 
     return victim;
+}
+
+// Invalidates a line record in the cache.
+void Cache::invalidate(uint64_t paddr) {
+    std::optional<uint32_t> line_hit = hit(paddr);
+    if (line_hit != std::nullopt) {
+        cache[line_hit.value()].mesi = Mesi::I;
+        cache[line_hit.value()].valid = 0;
+    }
+
+    return;
+}
+
+// Returns whether or not a line record is marked dirty in the cache.
+bool Cache::is_dirty(uint64_t paddr) {
+    std::optional<uint32_t> line_hit = hit(paddr);
+    if (line_hit != std::nullopt)   return cache[line_hit.value()].dirty;
+
+    return false;
+}
+
+// Returns whether or not a line record is marked valid in the cache.
+bool Cache::is_valid(uint64_t paddr) {
+    std::optional<uint32_t> line_hit = hit(paddr);
+    if (line_hit != std::nullopt)   return cache[line_hit.value()].valid;
+
+    return false;
+}
+
+// Clears the dirty status of a line record.
+void Cache::clear_dirty(uint64_t paddr) {
+    std::optional<uint32_t> line_hit = hit(paddr);
+    if (line_hit != std::nullopt)   cache[line_hit.value()].dirty = 0;
+
+    return;
+}
+
+// Returns the bytes of a line record (if valid).
+std::optional<std::vector<uint8_t>> Cache::get_line(uint64_t paddr) {
+    std::optional<uint32_t> line_hit = hit(paddr);
+    if (line_hit != std::nullopt)   return cache[line_hit.value()].data;
+
+    return std::nullopt;
 }
