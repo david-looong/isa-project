@@ -17,7 +17,7 @@ class Machine {
     private:
         MemorySystem mem_system;
     public:
-        Machine(uint32_t mem_size) : mem_system(mem_size) {}
+        Machine(uint32_t mem_size, Settings settings = {}) : mem_system(mem_size, settings) {}
         uint32_t get_memory_size();
         MemorySystemResult access(uint32_t vaddr, uint8_t size, AccessType type, uint32_t mhartid, uint32_t satp, uint32_t store_val, uint32_t amo_operand, AtomicOps op);
         uint32_t read(uint32_t addr, uint8_t size);

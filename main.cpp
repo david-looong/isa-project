@@ -42,7 +42,28 @@ int main(int argc, char* argv[]) {
     // Converts the resolved map into a Config object.
     Config final_config = value_conversion(resolved);
 
-    Machine machine = Machine(final_config.mem);
+    // Initializes the machine with all cache settings.
+    Machine machine = Machine(final_config.mem,
+        {   .cL = final_config.cL,
+            .harts = final_config.harts,
+            .c1_type = final_config.c1,
+            .c2_type = final_config.c2,
+            .c3_type = final_config.c3,
+            .cS1 = final_config.cS1,
+            .cS2 = final_config.cS2,
+            .cS3 = final_config.cS3,
+            .cB1 = final_config.cB1,
+            .cB2 = final_config.cB2,
+            .cB3 = final_config.cB3,
+            .cW1 = final_config.cW1,
+            .cW2 = final_config.cW2,
+            .cW3 = final_config.cW3,
+            .cE1 = final_config.cE1,
+            .cE2 = final_config.cE2,
+            .cE3 = final_config.cE3
+        }
+    );
+
     std::vector<Hart> harts = {};
     std::vector<HartPipelineObject> hpos = {};
 

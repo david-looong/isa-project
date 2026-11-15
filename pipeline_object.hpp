@@ -14,7 +14,6 @@ struct Latch {
     Instruction i;
     uint32_t pc = 0;
     ParkReason fault = ParkReason::Running;
-    uint32_t latency = 0;
     uint8_t rs1 = 0;
     uint8_t rs2 = 0;
     uint32_t predicted_next_pc = 0;
