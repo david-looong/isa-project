@@ -71,6 +71,7 @@ class Hart {
         uint8_t get_bp_predict(uint32_t branch_pc);
         void update_bp(uint32_t branch_pc, uint8_t outcome);
         void increment_csr_cycle();
+        void sfence();
 };
 
 #endif // HART_HPP

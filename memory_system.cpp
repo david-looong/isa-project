@@ -25,6 +25,8 @@ MemorySystem::MemorySystem(uint32_t mem_size, Settings settings) : mem_size(mem_
     }
 
     reservations.resize(s.harts);
+    tlbs.resize(s.harts);
+    for (size_t i = 0; i < tlbs.size(); i++)    tlbs[i].entries.resize(s.tlb);
 }
 
 
@@ -188,10 +190,175 @@ void MemorySystem::range_write(uint32_t hartid, uint8_t level_num, uint64_t padd
     return;
 }
 
+// Translates the virtual address into a physical address, and if no faults occur, memory is accessed
+// with the physical address.
+MemorySystemResult MemorySystem::access(uint32_t vaddr, uint8_t size, AccessType type, [[maybe_unused]] uint32_t mhartid, [[maybe_unused]] uint32_t satp, uint32_t store_val, [[maybe_unused]] uint32_t amo_operand, [[maybe_unused]] AtomicOps op) {
+    MemorySystemResult result;
+    uint64_t paddr = 0;
+    uint64_t latency = 0;
+
+    // If a fault occurs, no memory access can occur.
+    result.pr = translate(vaddr, type, mhartid, satp, paddr, latency);
+    if (result.pr != ParkReason::Running) {
+        return result;
+    }
+    
+    // Account for the latency of the memory operation.
+    result = phys_access(paddr, size, type, mhartid, satp, store_val, amo_operand, op);
+    result.latency += latency;
+
+    return result;
+}
+
+// Translates the virtual address to a physical address for one HART.
+ParkReason MemorySystem::translate(uint32_t vaddr, AccessType type, uint32_t hartid, uint32_t satp, uint64_t &paddr, uint64_t &latency) {
+    // satp.MODE = 0 means no translation and the TLB is never touched.
+    // Also covers -mmu off since Csr never stores satp, so it stays 0.
+    if (satp >> 31 == 0) {
+        paddr = vaddr;
+        return ParkReason::Running;
+    }
+
+    PerHartTLB &t = tlbs[hartid];
+
+    // Any change to satp invalidates this HART's TLB and wrrants a TLB flush.
+    if (satp != t.last_satp) {
+        for (size_t i = 0; i < t.entries.size(); i++)   t.entries[i].valid = false;
+        t.last_satp = satp;
+    }
+
+    // Determine what kind of page fault occurs if one were to occur.
+    ParkReason page_fault_pr;
+    if (type == AccessType::Fetch)                                                              page_fault_pr = ParkReason::Fetch;
+    else if (type == AccessType::Load || type == AccessType::LR)                                page_fault_pr = ParkReason::Load;
+    else if (type == AccessType::Store || type == AccessType::SC || type == AccessType::Amo)    page_fault_pr = ParkReason::AmoStore;
+
+    // Level 1 entries are 4 MiB pages and match on VPN[1] only
+    // Level 0 entries match full 20-bit VPN.
+    if (s.tlb > 0) {
+        for (size_t i = 0; i < t.entries.size(); i++) {
+            if (!t.entries[i].valid)    continue;
+
+            bool hit = (t.entries[i].level == 1) ? (vaddr >> 22) == t.entries[i].vpn : (vaddr >> 12) == t.entries[i].vpn;
+            
+            // Hits add no latency.
+            if (hit) {
+                t.counter++;
+                t.entries[i].last_used = t.counter;
+                t.entries[i].uses++;
+
+                // Failing the permission check faults without walking again.
+                if (!allowed(t.entries[i].perms, type)) return page_fault_pr;
+
+                if (t.entries[i].level == 1)    paddr = (uint64_t(t.entries[i].ppn) << 22) | (vaddr & 0x3FFFFF);
+                else                            paddr = (uint64_t(t.entries[i].ppn) << 12) | (vaddr & 0xFFF);
+
+                return ParkReason::Running;
+            }
+        }
+    }
+
+    uint64_t a = uint64_t(satp & 0x3FFFFF) << 12;
+    MemorySystemResult pte_result;
+
+    // Physical load through caches and coherency.
+    for (int32_t lvl = 1; lvl >= 0; lvl--) {
+        uint64_t vpn = (lvl == 1) ? vaddr >> 22 : (vaddr >> 12) & 0x3FF;
+        pte_result = phys_access(a + vpn * 4, 4, AccessType::Load, hartid, satp, 0, 0, AtomicOps::Swap);
+
+        if (pte_result.pr != ParkReason::Running)   return pte_result.pr;
+        latency += pte_result.latency;
+        uint64_t pte = pte_result.data;
+
+        // Extract permission bits.
+        uint8_t V = pte & 0x1;
+        uint8_t R = (pte >> 1) & 0x1;
+        uint8_t W = (pte >> 2) & 0x1;
+        uint8_t X = (pte >> 3) & 0x1;
+
+        if (!V || (!R && W))    return page_fault_pr;
+        
+        // Marks a leaf. Otherwise, the PTE points to the next table.
+        if (R || X) {
+            if (!allowed(uint8_t(pte & 0xFF), type))    return page_fault_pr;
+
+            // Only a successful walk fills the TLB.
+            if (s.tlb > 0) {
+                uint32_t victim = 0;
+
+                // Victim is a free slot first.
+                for (size_t i = 0; i < t.entries.size(); i++) {
+                    if (!t.entries[i].valid) {
+                        victim = i;
+                        break;
+                    }
+
+                    // TLB eviction policy matches that of cache eviction.
+                    switch (s.tlbE) {
+                        case EvictionPolicy::fifo:
+                            if (t.entries[i].inserted < t.entries[victim].inserted)     victim = i;
+                            break;
+                        case EvictionPolicy::lru:
+                            if (t.entries[i].last_used < t.entries[victim].last_used)   victim = i;
+                            break;
+                        case EvictionPolicy::lfu:
+                            if (t.entries[i].uses < t.entries[victim].uses || (t.entries[i].uses == t.entries[victim].uses && t.entries[i].inserted < t.entries[victim].inserted)) {
+                                victim = i;
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+                }
+
+                // Stores the VPN, PPN, leaf level, permission bits, eviction stamps, and validness.
+                t.entries[victim].valid = true;
+
+                if (lvl == 1) {
+                    t.entries[victim].vpn = vaddr >> 22;
+                    t.entries[victim].ppn = pte >> 20;
+                } else {
+                    t.entries[victim].vpn = vaddr >> 12;
+                    t.entries[victim].ppn = pte >> 10;
+                }
+
+                t.entries[victim].level = lvl;
+                t.entries[victim].perms = pte & 0xFF;
+                t.counter++;
+                t.entries[victim].inserted = t.counter;
+                t.entries[victim].last_used = t.counter;
+                t.entries[victim].uses = 1;
+            }
+
+            // Level 1 leaf is 4 MiB megapage, so only PPN[1] is kept and offset is 22 bits.
+            // Level 0 leaf is 4 KiB with a 12-bit offset
+            if (lvl == 1)   paddr = (uint64_t(pte >> 20) << 22) | (vaddr & 0x3FFFFF);
+            else            paddr = (uint64_t(pte >> 10) << 12) | (vaddr & 0xFFF);
+
+            return ParkReason::Running;
+        }
+
+        // No leaf by level 0; page fault.
+        if (lvl == 0)   return page_fault_pr;
+
+        a = uint64_t(pte >> 10) << 12;
+    }
+
+    return page_fault_pr;
+}
+
+// Flushes all TLB entries in the event of an SFENCE.VMA.
+void MemorySystem::sfence(uint32_t hartid) {
+    PerHartTLB &t = tlbs[hartid];
+    for (size_t i = 0; i < t.entries.size(); i++)   t.entries[i].valid = false;
+
+    return;
+}
+
 // Checks for RAM access faults and either reads/writes to/from caches/RAM depending on the access type.
 // Bus transactions occur per touched granule before any reads/writes occur, and after the reads/writes,
 // the final MESI state is set for each granule.
-MemorySystemResult MemorySystem::access(uint32_t vaddr, uint8_t size, AccessType type, [[maybe_unused]] uint32_t mhartid, [[maybe_unused]] uint32_t satp, uint32_t store_val, [[maybe_unused]] uint32_t amo_operand, [[maybe_unused]] AtomicOps op) {
+MemorySystemResult MemorySystem::phys_access(uint64_t paddr, uint8_t size, AccessType type, [[maybe_unused]] uint32_t mhartid, [[maybe_unused]] uint32_t satp, uint32_t store_val, [[maybe_unused]] uint32_t amo_operand, [[maybe_unused]] AtomicOps op) {
     MemorySystemResult result;
     uint64_t deepest = 0;
     std::vector<uint8_t> bytes;
@@ -201,21 +368,21 @@ MemorySystemResult MemorySystem::access(uint32_t vaddr, uint8_t size, AccessType
     std::unique_lock<std::mutex> dir_lock_2;
 
     // Bounds checking RAM.
-    if (static_cast<uint64_t>(vaddr) + size > mem_size) {
+    if (paddr + size > mem_size) {
         result.pr = ParkReason::Access;
         return result;
     }
 
     // LR, SC, and AMO are word-only, so check to make sure that there isn't a misaligned address.
-    if ((vaddr & 3) != 0 && (type == AccessType::LR || type == AccessType::SC || type == AccessType::Amo)) {
+    if ((paddr & 3) != 0 && (type == AccessType::LR || type == AccessType::SC || type == AccessType::Amo)) {
         result.pr = ParkReason::Access;
         return result;
     }
 
     // If a granule access crosses a boundary, use two granules.
-    granules.push_back({granule_base(vaddr), Mesi::I});
-    if (granules[0].first != granule_base(vaddr + size - 1)) {
-        granules.push_back({granule_base(vaddr + size - 1), Mesi::I});
+    granules.push_back({granule_base(paddr), Mesi::I});
+    if (granules[0].first != granule_base(paddr + size - 1)) {
+        granules.push_back({granule_base(paddr + size - 1), Mesi::I});
     }
 
     // Which lock is taken depends on which coherency protocol is occuring.
@@ -233,7 +400,7 @@ MemorySystemResult MemorySystem::access(uint32_t vaddr, uint8_t size, AccessType
 
     // Determines if a read or write has occurred.
     bool is_read = (type == AccessType::Fetch || type == AccessType::Load || type == AccessType::LR);
-    bool is_write = (type == AccessType::Store || (type == AccessType::SC && reservations[mhartid].valid && reservations[mhartid].word_addr == vaddr) || type == AccessType::Amo);
+    bool is_write = (type == AccessType::Store || (type == AccessType::SC && reservations[mhartid].valid && reservations[mhartid].word_addr == paddr) || type == AccessType::Amo);
 
     // Only occurs if coherency is activated.
     if ((is_read || is_write) && coherent) {
@@ -255,7 +422,7 @@ MemorySystemResult MemorySystem::access(uint32_t vaddr, uint8_t size, AccessType
 
     // Reads if a fetch/load is indicated, writes for stores.
     if (is_read) {
-        bytes = range_read(mhartid, 1, vaddr, size, deepest);
+        bytes = range_read(mhartid, 1, paddr, size, deepest);
         for (size_t i = 0; i < bytes.size(); i++)   result.data = result.data | (bytes[i] << (i * 8));
     } else if (is_write) {
         // If it is an atomic instruction, perform the atomic operation, write the result into the cache,
@@ -263,7 +430,7 @@ MemorySystemResult MemorySystem::access(uint32_t vaddr, uint8_t size, AccessType
         if (type == AccessType::Amo) {
             uint32_t old_word = 0;
             uint32_t new_word = 0;
-            bytes = range_read(mhartid, 1, vaddr, size, deepest);
+            bytes = range_read(mhartid, 1, paddr, size, deepest);
 
             for (size_t i = 0; i < bytes.size(); i++)   old_word = old_word | (bytes[i] << (i * 8));
 
@@ -299,11 +466,11 @@ MemorySystemResult MemorySystem::access(uint32_t vaddr, uint8_t size, AccessType
 
             bytes.clear();
             for (size_t i = 0; i < size; i++)   bytes.push_back((new_word >> (i * 8)) & 0xFF);
-            range_write(mhartid, 1, vaddr, bytes, deepest);
+            range_write(mhartid, 1, paddr, bytes, deepest);
             result.data = old_word;
         } else {
             for (size_t i = 0; i < size; i++)   bytes.push_back((store_val >> (i * 8)) & 0xFF);
-            range_write(mhartid, 1, vaddr, bytes, deepest);
+            range_write(mhartid, 1, paddr, bytes, deepest);
         }
     }
 
@@ -324,7 +491,7 @@ MemorySystemResult MemorySystem::access(uint32_t vaddr, uint8_t size, AccessType
     // it doesn't write. Either way, the reservation clears.
     if (type == AccessType::LR) {
         reservations[mhartid].valid = true;
-        reservations[mhartid].word_addr = vaddr;
+        reservations[mhartid].word_addr = paddr;
     } else if (type == AccessType::SC) {
         if (is_write) {
             result.data = 0;
@@ -340,7 +507,7 @@ MemorySystemResult MemorySystem::access(uint32_t vaddr, uint8_t size, AccessType
     // Any store, AMO or successful SC from another HART to that word address clears it.
     if (is_write) {
         for (size_t hart = 0; hart < s.harts; hart++) {
-            if (hart != mhartid && reservations[hart].valid && byte_ranges_overlap(vaddr, reservations[hart].word_addr, size)) {
+            if (hart != mhartid && reservations[hart].valid && byte_ranges_overlap(paddr, reservations[hart].word_addr, size)) {
                     reservations[hart].valid = false;
                     reservations[hart].word_addr = 0;
             }
@@ -486,4 +653,23 @@ bool MemorySystem::holds_granule(uint32_t hartid, uint64_t base) {
 
 bool MemorySystem::byte_ranges_overlap(uint32_t vaddr, uint32_t word_addr, uint32_t size) {
     return vaddr < word_addr + 4 && word_addr < vaddr + size;
+}
+
+// Returns whether a page fault occurs or not based on a combination of permission bits.
+bool MemorySystem::allowed(uint8_t perms, AccessType type) {
+    uint8_t V = perms & 0x1;
+    uint8_t R = (perms >> 1) & 0x1;
+    uint8_t W = (perms >> 2) & 0x1;
+    uint8_t X = (perms >> 3) & 0x1;
+
+    if (!V || (!R && W))    return false;
+    
+    if (R || X) {
+        if (type == AccessType::Fetch && !X)                                    return false;
+        else if ((type == AccessType::Load || type == AccessType::LR) && !R)    return false;
+        else if ((type == AccessType::Store || type == AccessType::SC) && !W)   return false;
+        else if (type == AccessType::Amo && (!R || !W))                         return false;
+    }
+
+    return true;
 }

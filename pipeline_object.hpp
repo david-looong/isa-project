@@ -36,6 +36,7 @@ struct HartPipelineObject {
     bool fetch_stall;
     bool fetch_valid;
     bool csr_write_pending;
+    bool sfence_pending;
     uint32_t mem_wait_current;
     uint32_t mem_wait_next;
     uint32_t fetch_wait;
@@ -65,6 +66,7 @@ struct HartPipelineObject {
         fetch_stall = false;
         fetch_valid = false;
         csr_write_pending = false;
+        sfence_pending = false;
         mem_wait_current = 0;
         mem_wait_next = 0;
         fetch_wait = 0;

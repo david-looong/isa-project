@@ -3,9 +3,9 @@
  * Synopsis: This header file contains the entirety of the memory system. It includes
  * the following: several enum classes to classify parking reasons, access types, and
  * atomic ops; a struct to hold contents of a memory operation; a struct to hold an
- * entry of a directory for -cC dir; a struct for HART reservations when LR or SC
- * are involved; a struct to hold all cache config settings; and a memory system class
- * where the memory seam and caches live.
+ * entry of a directory for -cC dir; a struct for a TLB entry; a struct for per-HART TLBs;
+ * a struct for HART reservations when LR or SC are involved; a struct to hold all cache
+ * config settings; and a memory system class where the memory seam and caches live.
 */
 
 #ifndef MEMORY_SYSTEM_HPP
@@ -36,6 +36,23 @@ struct DirEntry {
     std::mutex dir_lock;
 };
 
+struct TLBEntry {
+    bool valid = false;
+    uint64_t vpn = 0;
+    uint64_t ppn = 0;
+    uint8_t level = 0;
+    uint8_t perms = 0;
+    uint64_t inserted = 0;
+    uint64_t last_used = 0;
+    uint64_t uses = 0;
+};
+
+struct PerHartTLB {
+    std::vector<TLBEntry> entries;
+    uint32_t last_satp = 0;
+    uint64_t counter = 0;
+};
+
 struct Reservation {
     bool valid = false;
     uint32_t word_addr = 0;
@@ -60,6 +77,8 @@ struct Settings {
     EvictionPolicy cE1 = EvictionPolicy::fifo;
     EvictionPolicy cE2 = EvictionPolicy::lru;
     EvictionPolicy cE3 = EvictionPolicy::lfu;
+    EvictionPolicy tlbE = EvictionPolicy::lru;
+    uint32_t tlb = 8;
     uint32_t L1 = 1;
     uint32_t L2 = 4;
     uint32_t L3 = 12;
@@ -74,6 +93,7 @@ class MemorySystem {
         Settings s;
         uint32_t granule;
         std::vector<Reservation> reservations;
+        std::vector<PerHartTLB> tlbs;
         std::vector<Cache> L1;
         std::vector<Cache> L2;
         std::optional<Cache> L3;
@@ -93,12 +113,16 @@ class MemorySystem {
         bool bus_transaction(uint32_t hartid, uint64_t base, BusOp bus_op, uint64_t& deepest);
         bool holds_granule(uint32_t hartid, uint64_t base);
         bool byte_ranges_overlap(uint32_t vaddr, uint32_t word_addr, uint32_t size);
+        bool allowed(uint8_t perms, AccessType type);
         // per-HART state, indexed by HART id:
         //     TLB, LR/SC reservation
         // the "busy until tick" counter
     public:
         MemorySystem(uint32_t mem_size, Settings settings);
         MemorySystemResult access(uint32_t vaddr, uint8_t size, AccessType type, [[maybe_unused]] uint32_t mhartid, [[maybe_unused]] uint32_t satp, uint32_t store_val, [[maybe_unused]] uint32_t amo_operand, [[maybe_unused]] AtomicOps op);
+        MemorySystemResult phys_access(uint64_t paddr, uint8_t size, AccessType type, [[maybe_unused]] uint32_t mhartid, [[maybe_unused]] uint32_t satp, uint32_t store_val, [[maybe_unused]] uint32_t amo_operand, [[maybe_unused]] AtomicOps op);
+        ParkReason translate(uint32_t vaddr, AccessType type, uint32_t hartid, uint32_t satp, uint64_t &paddr, uint64_t &latency);
+        void sfence(uint32_t hartid);
         uint32_t get_memory_size();
         Cache& get_cache_level(uint32_t hartid, uint32_t level_num);
         uint16_t dir_sharers(uint64_t base);

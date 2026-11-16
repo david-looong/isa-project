@@ -61,7 +61,9 @@ int main(int argc, char* argv[]) {
             .cW3 = final_config.cW3,
             .cE1 = final_config.cE1,
             .cE2 = final_config.cE2,
-            .cE3 = final_config.cE3
+            .cE3 = final_config.cE3,
+            .tlbE = final_config.tlbE,
+            .tlb = final_config.tlb
         }
     );
 

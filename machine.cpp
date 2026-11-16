@@ -26,3 +26,7 @@ uint32_t Machine::read(uint32_t addr, uint8_t size) {
 void Machine::write(uint32_t addr, uint8_t size, uint32_t value) {
     return mem_system.write(addr, size, value);
 }
+
+void Machine::sfence(uint32_t hartid) {
+    return mem_system.sfence(hartid);
+}

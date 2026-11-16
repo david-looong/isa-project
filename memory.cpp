@@ -11,6 +11,7 @@ void memory_rising_edge(Hart &hart, HartPipelineObject &hpo) {
     hpo.mem_wb_next = hpo.ex_mem_current;
     hpo.mem_stall = false;
     hpo.csr_write_pending = false;
+    hpo.sfence_pending = false;
     MemorySystemResult result;
     uint32_t old_csr_val = 0;
     uint32_t new_csr_val = 0;
@@ -21,6 +22,7 @@ void memory_rising_edge(Hart &hart, HartPipelineObject &hpo) {
 
     uint8_t funct3 = (hpo.mem_wb_next.i.inst & 0x7000) >> 12;
     uint8_t funct5 = (hpo.mem_wb_next.i.inst >> 27) & 0x1F;
+    uint8_t funct7 = (hpo.mem_wb_next.i.inst >> 25) & 0xEF;
 
     // If no memory access is in progress, proceed with an access. Otherwise, no access.
     if (hpo.mem_wait_current == 0) {
@@ -73,6 +75,9 @@ void memory_rising_edge(Hart &hart, HartPipelineObject &hpo) {
                 hpo.csr_write_val = new_csr_val;
                 hpo.csr_write_num = csr_num;
             }
+        // In the event we are dealing with an SFENCE.VMA instruction.
+        } else if ((hpo.mem_wb_next.i.inst & 0x7F) == 0x73 && funct3 == 0 && funct7 == 0b0001001) {
+            hpo.sfence_pending = true;
         }
 
         // Determines how to access memory if it is an atomic instruction.
@@ -180,9 +185,10 @@ void memory_rising_edge(Hart &hart, HartPipelineObject &hpo) {
 // Falling edge of the memory stage of the instruction pipeline.
 void memory_falling_edge(Hart &hart, HartPipelineObject &hpo) {
     // If a CSR write is pending, write the CSR on the falling edge.
-    if (hpo.csr_write_pending) {
-        hart.set_csr(hpo.csr_write_num, hpo.csr_write_val);
-    }
+    if (hpo.csr_write_pending)  hart.set_csr(hpo.csr_write_num, hpo.csr_write_val);
+
+    // If a SFENCE.VMA is pending, flush all TLB entries.
+    if (hpo.sfence_pending) hart.sfence();
 
     // Sets up instruction for writeback stage.
     hpo.mem_wb_current = hpo.mem_wb_next;

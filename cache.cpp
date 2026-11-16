@@ -156,7 +156,7 @@ uint32_t Cache::evict_line(uint32_t set) {
                 break;
             default:
                 break;
-            }
+        }
     }
 
     return victim;

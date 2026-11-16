@@ -161,3 +161,8 @@ void Hart::increment_csr_cycle() {
     csrs.increment_cycle();
     return;
 }
+
+// Flushes the TLB when a SFENCE.VMA occurs.
+void Hart::sfence() {
+    return m.sfence(csrs.read(0xF14));
+}

@@ -22,6 +22,7 @@ class Machine {
         MemorySystemResult access(uint32_t vaddr, uint8_t size, AccessType type, uint32_t mhartid, uint32_t satp, uint32_t store_val, uint32_t amo_operand, AtomicOps op);
         uint32_t read(uint32_t addr, uint8_t size);
         void write(uint32_t addr, uint8_t size, uint32_t value);
+        void sfence(uint32_t hartid);
 };
 
 #endif // MACHINE_HPP
