@@ -27,6 +27,7 @@ void Machine::write(uint32_t addr, uint8_t size, uint32_t value) {
     return mem_system.write(addr, size, value);
 }
 
+// Flushes the TLB when a SFENCE.VMA occurs.
 void Machine::sfence(uint32_t hartid) {
     return mem_system.sfence(hartid);
 }
