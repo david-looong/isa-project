@@ -23,6 +23,8 @@ MemorySystem::MemorySystem(uint32_t mem_size, Settings settings) : mem_size(mem_
     if (settings.cL == 3) {
         L3 = Cache(settings.cS3, settings.cB3, settings.c3_type, settings.cW3, settings.cE3);
     }
+
+    reservations.resize(s.harts);
 }
 
 
@@ -194,6 +196,9 @@ MemorySystemResult MemorySystem::access(uint32_t vaddr, uint8_t size, AccessType
     uint64_t deepest = 0;
     std::vector<uint8_t> bytes;
     std::vector<std::pair<uint64_t, Mesi>> granules;
+    std::unique_lock<std::mutex> bus_lock;
+    std::unique_lock<std::mutex> dir_lock_1;
+    std::unique_lock<std::mutex> dir_lock_2;
 
     // Bounds checking RAM.
     if (static_cast<uint64_t>(vaddr) + size > mem_size) {
@@ -201,46 +206,144 @@ MemorySystemResult MemorySystem::access(uint32_t vaddr, uint8_t size, AccessType
         return result;
     }
 
-    // Only occurs if coherency is activated.
-    if (s.cL >= 1 && s.cC != CacheCoherency::none) {
-        granules.push_back({granule_base(vaddr), Mesi::I});
-        // If a granule access crosses a boundary, use two granules.
-        if (granules[0].first != granule_base(vaddr + size - 1)) {
-            granules.push_back({granule_base(vaddr + size - 1), Mesi::I});
-        }
+    // LR, SC, and AMO are word-only, so check to make sure that there isn't a misaligned address.
+    if ((vaddr & 3) != 0 && (type == AccessType::LR || type == AccessType::SC || type == AccessType::Amo)) {
+        result.pr = ParkReason::Access;
+        return result;
+    }
 
+    // If a granule access crosses a boundary, use two granules.
+    granules.push_back({granule_base(vaddr), Mesi::I});
+    if (granules[0].first != granule_base(vaddr + size - 1)) {
+        granules.push_back({granule_base(vaddr + size - 1), Mesi::I});
+    }
+
+    // Which lock is taken depends on which coherency protocol is occuring.
+    bool coherent = (s.cL >= 1 && s.cC != CacheCoherency::none);
+    if (coherent) {
+        if (s.cC == CacheCoherency::snoop) {
+            bus_lock = std::unique_lock<std::mutex>(bus_mutex);
+        } else {
+            for (size_t i = 0; i < granules.size(); i++) {
+                if (i == 0) dir_lock_1 = std::unique_lock<std::mutex>(dir[granules[i].first].dir_lock);
+                else        dir_lock_2 = std::unique_lock<std::mutex>(dir[granules[i].first].dir_lock);
+            }
+        }
+    }
+
+    // Determines if a read or write has occurred.
+    bool is_read = (type == AccessType::Fetch || type == AccessType::Load || type == AccessType::LR);
+    bool is_write = (type == AccessType::Store || (type == AccessType::SC && reservations[mhartid].valid && reservations[mhartid].word_addr == vaddr) || type == AccessType::Amo);
+
+    // Only occurs if coherency is activated.
+    if ((is_read || is_write) && coherent) {
         // Bus transaction per granule, which determines whether the granule is shared across
         // HARTS or is exclusive only to mhartid.
         for (uint32_t i = 0; i < granules.size(); i++) {
             granules[i].second = my_state(mhartid, granules[i].first);
-            if (type == AccessType::Fetch || type == AccessType::Load) {
+            if (is_read) {
                 if (granules[i].second == Mesi::I) {
                     bool shared = bus_transaction(mhartid, granules[i].first, BusOp::Rd, deepest);
                     if (shared) granules[i].second = Mesi::S;
                     else        granules[i].second = Mesi::E;
                 }
-            } else if (type == AccessType::Store) {
+            } else if (is_write) {
                 if (granules[i].second == Mesi::S || granules[i].second == Mesi::I)   bus_transaction(mhartid, granules[i].first, BusOp::RdX, deepest);
             }
         }
     }
 
     // Reads if a fetch/load is indicated, writes for stores.
-    if (type == AccessType::Fetch || type == AccessType::Load) {
+    if (is_read) {
         bytes = range_read(mhartid, 1, vaddr, size, deepest);
         for (size_t i = 0; i < bytes.size(); i++)   result.data = result.data | (bytes[i] << (i * 8));
-    } else if (type == AccessType::Store) {
-        for (size_t i = 0; i < size; i++)   bytes.push_back((store_val >> (i * 8)) & 0xFF);
-        range_write(mhartid, 1, vaddr, bytes, deepest);
+    } else if (is_write) {
+        // If it is an atomic instruction, perform the atomic operation, write the result into the cache,
+        // and retain the old word from the cache to return later.
+        if (type == AccessType::Amo) {
+            uint32_t old_word = 0;
+            uint32_t new_word = 0;
+            bytes = range_read(mhartid, 1, vaddr, size, deepest);
+
+            for (size_t i = 0; i < bytes.size(); i++)   old_word = old_word | (bytes[i] << (i * 8));
+
+            switch(op) {
+                case AtomicOps::Swap:
+                    new_word = amo_operand;
+                    break;
+                case AtomicOps::Add:
+                    new_word = old_word + amo_operand;
+                    break;
+                case AtomicOps::And:
+                    new_word = old_word & amo_operand;
+                    break;
+                case AtomicOps::Or:
+                    new_word = old_word | amo_operand;
+                    break;
+                case AtomicOps::Xor:
+                    new_word = old_word ^ amo_operand;
+                    break;
+                case AtomicOps::Max:
+                    new_word = std::max(static_cast<int32_t>(old_word), static_cast<int32_t>(amo_operand));
+                    break;
+                case AtomicOps::MaxU:
+                    new_word = std::max(old_word, amo_operand);
+                    break;
+                case AtomicOps::Min:
+                    new_word = std::min(static_cast<int32_t>(old_word), static_cast<int32_t>(amo_operand));
+                    break;
+                case AtomicOps::MinU:
+                    new_word = std::min(old_word, amo_operand);
+                    break;
+            }
+
+            bytes.clear();
+            for (size_t i = 0; i < size; i++)   bytes.push_back((new_word >> (i * 8)) & 0xFF);
+            range_write(mhartid, 1, vaddr, bytes, deepest);
+            result.data = old_word;
+        } else {
+            for (size_t i = 0; i < size; i++)   bytes.push_back((store_val >> (i * 8)) & 0xFF);
+            range_write(mhartid, 1, vaddr, bytes, deepest);
+        }
     }
 
     // Sets the final MESI state for the granules. If coherency is directory, the HART directory bit is set.
-    if (s.cL >= 1 && s.cC != CacheCoherency::none) {
+    if ((is_read || is_write) && coherent) {
         for (uint32_t i = 0; i < granules.size(); i++) {
-            if (type == AccessType::Fetch || type == AccessType::Load) set_my_state(mhartid, granules[i].first, granules[i].second);
-            else if (type == AccessType::Store)                       set_my_state(mhartid, granules[i].first, Mesi::M);
+            if (is_read) {
+                set_my_state(mhartid, granules[i].first, granules[i].second);
+            } else if (is_write) {
+                set_my_state(mhartid, granules[i].first, Mesi::M);
+            }
 
             if (s.cC == CacheCoherency::dir)    dir[granules[i].first].sharers |= (1u << mhartid);
+        }
+    }
+
+    // LR loads and sets the per-HART reservation; SC succeeds only if it writes, otherwise
+    // it doesn't write. Either way, the reservation clears.
+    if (type == AccessType::LR) {
+        reservations[mhartid].valid = true;
+        reservations[mhartid].word_addr = vaddr;
+    } else if (type == AccessType::SC) {
+        if (is_write) {
+            result.data = 0;
+        } else {
+            result.data = 1;
+            result.latency = 1;
+        }
+
+        reservations[mhartid].valid = false;
+        reservations[mhartid].word_addr = 0;
+    }
+
+    // Any store, AMO or successful SC from another HART to that word address clears it.
+    if (is_write) {
+        for (size_t hart = 0; hart < s.harts; hart++) {
+            if (hart != mhartid && reservations[hart].valid && byte_ranges_overlap(vaddr, reservations[hart].word_addr, size)) {
+                    reservations[hart].valid = false;
+                    reservations[hart].word_addr = 0;
+            }
         }
     }
 
@@ -339,23 +442,20 @@ bool MemorySystem::snoop(uint32_t hartid, uint64_t base, BusOp bus_op, uint64_t&
 // Single serialization point to mimic threading at this point in time.
 // Returns whether any other HART held the granule.
 bool MemorySystem::bus_transaction(uint32_t hartid, uint64_t base, BusOp bus_op, uint64_t& deepest) {
-    // Which lock is taken depends on which coherency protocol is occuring.
-    std::mutex& chosen_mutex = (s.cC == CacheCoherency::snoop) ? bus_mutex : dir[base].dir_lock;
-    std::lock_guard<std::mutex> guard(chosen_mutex);
-    
     bool any = false;
+    DirEntry* cur_dir = nullptr;
     
-    DirEntry& cur_dir = dir[base];
+    if (s.cC == CacheCoherency::dir)    cur_dir = &dir[base];
     
     // Every other HART (or sharers if coherency is dir) is snooped.
     for (uint32_t hart = 0; hart < s.harts; hart++) {
-        if (s.cC == CacheCoherency::dir && (cur_dir.sharers & (1u << hart)) == 0) continue;
+        if (s.cC == CacheCoherency::dir && (cur_dir->sharers & (1u << hart)) == 0) continue;
 
         if (hart == hartid)  continue;
         any |= snoop(hart, base, bus_op, deepest);
     }
 
-    if (s.cC == CacheCoherency::dir && bus_op == BusOp::RdX)   cur_dir.sharers = uint16_t(1u << hartid);
+    if (s.cC == CacheCoherency::dir && bus_op == BusOp::RdX)   cur_dir->sharers = uint16_t(1u << hartid);
 
     return any;
 }
@@ -382,4 +482,8 @@ bool MemorySystem::holds_granule(uint32_t hartid, uint64_t base) {
     }
 
     return false;
+}
+
+bool MemorySystem::byte_ranges_overlap(uint32_t vaddr, uint32_t word_addr, uint32_t size) {
+    return vaddr < word_addr + 4 && word_addr < vaddr + size;
 }

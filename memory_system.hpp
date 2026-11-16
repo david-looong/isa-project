@@ -3,8 +3,9 @@
  * Synopsis: This header file contains the entirety of the memory system. It includes
  * the following: several enum classes to classify parking reasons, access types, and
  * atomic ops; a struct to hold contents of a memory operation; a struct to hold an
- * entry of a directory for -cC dir; a struct to hold all cache config settings; and a
- * memory system class where the memory seam and caches live.
+ * entry of a directory for -cC dir; a struct for HART reservations when LR or SC
+ * are involved; a struct to hold all cache config settings; and a memory system class
+ * where the memory seam and caches live.
 */
 
 #ifndef MEMORY_SYSTEM_HPP
@@ -33,6 +34,11 @@ struct MemorySystemResult {
 struct DirEntry {
     uint16_t sharers = 0;
     std::mutex dir_lock;
+};
+
+struct Reservation {
+    bool valid = false;
+    uint32_t word_addr = 0;
 };
 
 struct Settings {
@@ -67,6 +73,7 @@ class MemorySystem {
         std::unique_ptr<uint8_t[]> ram;
         Settings s;
         uint32_t granule;
+        std::vector<Reservation> reservations;
         std::vector<Cache> L1;
         std::vector<Cache> L2;
         std::optional<Cache> L3;
@@ -85,6 +92,7 @@ class MemorySystem {
         bool snoop(uint32_t hartid, uint64_t base, BusOp bus_op, uint64_t& deepest);
         bool bus_transaction(uint32_t hartid, uint64_t base, BusOp bus_op, uint64_t& deepest);
         bool holds_granule(uint32_t hartid, uint64_t base);
+        bool byte_ranges_overlap(uint32_t vaddr, uint32_t word_addr, uint32_t size);
         // per-HART state, indexed by HART id:
         //     TLB, LR/SC reservation
         // the "busy until tick" counter

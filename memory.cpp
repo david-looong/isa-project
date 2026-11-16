@@ -20,13 +20,13 @@ void memory_rising_edge(Hart &hart, HartPipelineObject &hpo) {
     bool csr_will_write = false;
 
     uint8_t funct3 = (hpo.mem_wb_next.i.inst & 0x7000) >> 12;
-
+    uint8_t funct5 = (hpo.mem_wb_next.i.inst >> 27) & 0x1F;
 
     // If no memory access is in progress, proceed with an access. Otherwise, no access.
     if (hpo.mem_wait_current == 0) {
 
         // In the event we are dealing with a CSR instruction.
-         if ((hpo.mem_wb_next.i.inst & 0x7F) == 0x73 && funct3 != 0) {
+        if ((hpo.mem_wb_next.i.inst & 0x7F) == 0x73 && funct3 != 0) {
             csr_num = hpo.mem_wb_next.i.inst >> 20;
             rs1_field = (hpo.mem_wb_next.i.inst >> 15) & 0x1F;
 
@@ -73,10 +73,57 @@ void memory_rising_edge(Hart &hart, HartPipelineObject &hpo) {
                 hpo.csr_write_val = new_csr_val;
                 hpo.csr_write_num = csr_num;
             }
-         }
+        }
 
+        // Determines how to access memory if it is an atomic instruction.
+        if ((hpo.mem_wb_next.i.inst & 0x7F) == 0x2F) {
+            switch (funct5) {
+                case 0b00010: // LR
+                    result = hart.access(hpo.mem_wb_next.i.result, 4, AccessType::LR);
+                    break;
+                case 0b00011: // SC
+                    result = hart.access(hpo.mem_wb_next.i.result, 4, AccessType::SC, hpo.mem_wb_next.i.disp);
+                    break;
+                case 0b00001: // AMOSWAP.W
+                    result = hart.access(hpo.mem_wb_next.i.result, 4, AccessType::Amo, 0, hpo.mem_wb_next.i.disp, AtomicOps::Swap);
+                    break;
+                case 0b00000: // AMOADD.W
+                    result = hart.access(hpo.mem_wb_next.i.result, 4, AccessType::Amo, 0, hpo.mem_wb_next.i.disp, AtomicOps::Add);
+                    break;
+                case 0b00100: // AMOXOR.W
+                    result = hart.access(hpo.mem_wb_next.i.result, 4, AccessType::Amo, 0, hpo.mem_wb_next.i.disp, AtomicOps::Xor);
+                    break;
+                case 0b01100: // AMOAND.W
+                    result = hart.access(hpo.mem_wb_next.i.result, 4, AccessType::Amo, 0, hpo.mem_wb_next.i.disp, AtomicOps::And);
+                    break;
+                case 0b01000: // AMOOR.W
+                    result = hart.access(hpo.mem_wb_next.i.result, 4, AccessType::Amo, 0, hpo.mem_wb_next.i.disp, AtomicOps::Or);
+                    break;
+                case 0b10000: // AMOMIN.W
+                    result = hart.access(hpo.mem_wb_next.i.result, 4, AccessType::Amo, 0, hpo.mem_wb_next.i.disp, AtomicOps::Min);
+                    break;
+                case 0b10100: // AMOMAX.W
+                    result = hart.access(hpo.mem_wb_next.i.result, 4, AccessType::Amo, 0, hpo.mem_wb_next.i.disp, AtomicOps::Max);
+                    break;
+                case 0b11000: // AMOMINU.W
+                    result = hart.access(hpo.mem_wb_next.i.result, 4, AccessType::Amo, 0, hpo.mem_wb_next.i.disp, AtomicOps::MinU);
+                    break;
+                case 0b11100: // AMOMAXU.W
+                    result = hart.access(hpo.mem_wb_next.i.result, 4, AccessType::Amo, 0, hpo.mem_wb_next.i.disp, AtomicOps::MaxU);
+                    break;
+            }
+
+            // If a fault does occur, the HART is parked and the instruction is bubbled with a NOP.
+            if (result.pr != ParkReason::Running) {
+                hart.park(result.pr);
+                hpo.mem_wb_next = Latch();
+                hpo.mem_wb_next.i.inst = 0x00000013;
+                return;
+            } else {
+                hpo.mem_wb_next.i.result = result.data;
+            }
         // Determines how to access memory depending on if it is a LOAD or STORE.
-        if (hpo.mem_wb_next.i.memop <= 0b011 && hpo.mem_wb_next.i.memop != 0) {
+        } else if (hpo.mem_wb_next.i.memop <= 0b011 && hpo.mem_wb_next.i.memop != 0) {
             // Loads the value from RAM and checks if a LOAD access fault occurs.
             result = hart.access(hpo.mem_wb_next.i.result, 1 << (hpo.mem_wb_next.i.memop - 1), AccessType::Load);
             
