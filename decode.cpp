@@ -401,8 +401,13 @@ void decode_rising_edge(Hart& hart, HartPipelineObject& hpo, bool m, bool a) {
         return;
     }
 
-    // Resets the instruction status to ready every tick
-    hpo.no_stall = true;
+    // If ECALL isn't in in the current execute, memory, or writeback tick, reset
+    // the instruction status to ready every tick (no load-use hold).
+    if (hpo.id_ex_current.i.inst == 0x73 || hpo.ex_mem_current.i.inst == 0x73 || hpo.mem_wb_current.i.inst == 0x73) {
+        hpo.no_stall = false;
+    } else {
+        hpo.no_stall = true;
+    }
 
     // Decodes current fetched instruction and saves it for execute stage.
     hpo.id_ex_next = decode(hart, hpo.if_id_current, m, a);

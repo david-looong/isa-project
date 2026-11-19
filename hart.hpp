@@ -66,6 +66,7 @@ class Hart {
         void write_register(uint32_t index, uint32_t value);
         MemorySystemResult access(uint32_t vaddr, uint8_t size, AccessType type, uint32_t store_val = 0, uint32_t amo_operand = 0, AtomicOps op = AtomicOps::Swap);
         void park(ParkReason reason);
+        void unpark();
         bool is_parked();
         ParkReason get_pr();
         uint8_t get_bp_predict(uint32_t branch_pc);

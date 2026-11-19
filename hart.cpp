@@ -135,6 +135,13 @@ void Hart::park(ParkReason reason) {
     return;
 }
 
+// Sets the status of a Hart to unparked and the status to running again.
+void Hart::unpark() {
+    pr = ParkReason::Running;
+    parked = false;
+    return;
+}
+
 // Returns if a Hart is parked or not.
 bool Hart::is_parked() {
     return parked;

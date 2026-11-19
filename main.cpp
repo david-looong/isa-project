@@ -14,6 +14,7 @@
 #include "execute.hpp"
 #include "memory.hpp"
 #include "writeback.hpp"
+#include "syscall.hpp"
 #include <iostream>
 #include <vector>
 #include <map>
@@ -80,12 +81,11 @@ int main(int argc, char* argv[]) {
         hpos.push_back(HartPipelineObject());
     }
 
-    // Single-threaded clock loop
-    uint32_t tick_limit = 10000;
-    uint32_t num_ticks = 0;
     uint32_t active_harts;
+    SysCalls sys = {};
 
-    while (num_ticks < tick_limit) {
+    // Runs unless an exit syscall is indicated.
+    while (!sys.terminate) {
         // If there are no more active HARTs (i.e., the HART is parked and all older instructions have been resolved), stop the loop.
         active_harts = harts.size();
         for (uint32_t i = 0; i < harts.size(); i++) {
@@ -102,6 +102,9 @@ int main(int argc, char* argv[]) {
             writeback_rising_edge(harts[i], hpos[i]);
         }
 
+        // Services any syscalls picked up from the rising edge of the tick.
+        service_syscalls(harts, hpos, sys);
+
         // Do all falling edge phases of each stage in the instruction pipeline per HART.
         for (uint32_t i = 0; i < harts.size(); i++) {
             fetch_falling_edge(harts[i], hpos[i]);
@@ -111,21 +114,30 @@ int main(int argc, char* argv[]) {
             writeback_falling_edge(harts[i], hpos[i]);
         }
 
+        // Applies any changes to the harts resulting from syscalls.
+        apply_hart_changes(harts, hpos, sys);
+
         // Keep count of whether any instruction older than a faulted instruction has finished.
         for (uint32_t i = 0; i < harts.size(); i++) {
             if (harts[i].is_parked() && hpos[i].drain_ticks_left > 0)  hpos[i].drain_ticks_left--;
         }
-
-        num_ticks++;
     }
 
-    // Prints out information on each HART.
+    // If an exit syscall was indicated, flush the output stream and return the exit code.
+    if (sys.terminate) {
+        sys.out->flush();
+        return int(sys.exit_code);
+    }
+
+    // If any of the HARTs had a fault, flush the output stream and return 1 as the exit code.
     for (uint32_t i = 0; i < harts.size(); i++) {
-        std::cout << std::dec << "Hart " << i << ":" << std::endl;
-        std::cout << "Is parked? " << harts[i].is_parked() << std::endl;
-        std::cout << "Park Reason: " << static_cast<uint32_t>(harts[i].get_pr()) << std::endl;
-        std::cout << "Program Counter: " << std::hex << harts[i].get_pc() << std::endl;
-        std::cout << "Current Decode/Execute Instruction: " << hpos[i].id_ex_current.i.inst << std::endl;
-        std::cout << "Current Decode/Execute PC: " << hpos[i].id_ex_current.pc << std::endl;
+        if (harts[i].get_pr() != ParkReason::System) {
+            sys.out->flush();
+            return 1;
+        }
     }
+
+    // Flush the output stream and return 0 as the exit code.
+    sys.out->flush();
+    return 0;
 }
