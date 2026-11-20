@@ -70,13 +70,14 @@ void execute_rising_edge(Hart& hart, HartPipelineObject& hpo) {
     // Resets branch redirect/resolution status every tick.
     hpo.redirect = false;
     hpo.branch_resolved_tick = false;
+    hpo.execute_pr = ParkReason::Running;
 
     // If still ticks present in the memory hold, do nothing to protect forwarded operands.
     if (hpo.mem_wait_current > 0)   return;
 
-    // If the instruction has a fault, the HART is parked and execute stops.
+    // If the instruction has a fault, the HART's park request is recorded and execute stops.
     if (hpo.id_ex_current.fault != ParkReason::Running) {
-        hart.park(hpo.id_ex_current.fault);
+        hpo.execute_pr = hpo.id_ex_current.fault;
         return;
     }
 

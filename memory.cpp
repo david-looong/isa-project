@@ -12,6 +12,7 @@ void memory_rising_edge(Hart &hart, HartPipelineObject &hpo) {
     hpo.mem_stall = false;
     hpo.csr_write_pending = false;
     hpo.sfence_pending = false;
+    hpo.memory_pr = ParkReason::Running;
     MemorySystemResult result;
     uint32_t old_csr_val = 0;
     uint32_t new_csr_val = 0;
@@ -32,9 +33,9 @@ void memory_rising_edge(Hart &hart, HartPipelineObject &hpo) {
             csr_num = hpo.mem_wb_next.i.inst >> 20;
             rs1_field = (hpo.mem_wb_next.i.inst >> 15) & 0x1F;
 
-            // If the CSR doesn't actually exist, bubble the instruction and park the HART.
+            // If the CSR doesn't actually exist, bubble the instruction and record the park request.
             if (!hart.does_csr_exist(csr_num)) {
-                hart.park(ParkReason::IllegalInstruction);
+                hpo.memory_pr = ParkReason::IllegalInstruction;
                 hpo.mem_wb_next = Latch();
                 hpo.mem_wb_next.i.inst = 0x00000013;
                 return;
@@ -46,9 +47,9 @@ void memory_rising_edge(Hart &hart, HartPipelineObject &hpo) {
             }
 
             // If it's deemed to write but isn't actually a writable CSR, bubble the instruction
-            // and park the HART.
+            // and record the park request.
             if (csr_will_write && !hart.is_csr_writable(csr_num)) {
-                hart.park(ParkReason::IllegalInstruction);
+                hpo.memory_pr = ParkReason::IllegalInstruction;
                 hpo.mem_wb_next = Latch();
                 hpo.mem_wb_next.i.inst = 0x00000013;
                 return;
@@ -118,9 +119,9 @@ void memory_rising_edge(Hart &hart, HartPipelineObject &hpo) {
                     break;
             }
 
-            // If a fault does occur, the HART is parked and the instruction is bubbled with a NOP.
+            // If a fault does occur, the park request is recorded and the instruction is bubbled with a NOP.
             if (result.pr != ParkReason::Running) {
-                hart.park(result.pr);
+                hpo.memory_pr = result.pr;
                 hpo.mem_wb_next = Latch();
                 hpo.mem_wb_next.i.inst = 0x00000013;
                 return;
@@ -132,9 +133,9 @@ void memory_rising_edge(Hart &hart, HartPipelineObject &hpo) {
             // Loads the value from RAM and checks if a LOAD access fault occurs.
             result = hart.access(hpo.mem_wb_next.i.result, 1 << (hpo.mem_wb_next.i.memop - 1), AccessType::Load);
             
-            // If a fault does occur, the HART is parked and the instruction is bubbled with a NOP.
+            // If a fault does occur, the park request is recorded and the instruction is bubbled with a NOP.
             if (result.pr != ParkReason::Running) {
-                hart.park(result.pr);
+                hpo.memory_pr = result.pr;
                 hpo.mem_wb_next = Latch();
                 hpo.mem_wb_next.i.inst = 0x00000013;
                 return;
@@ -150,9 +151,9 @@ void memory_rising_edge(Hart &hart, HartPipelineObject &hpo) {
             // Write to RAM the stored value in the disp field and check if a STORE access fault occurs.
             result = hart.access(hpo.mem_wb_next.i.result, 1 << ((hpo.mem_wb_next.i.memop & 0b11) - 1), AccessType::Store, hpo.mem_wb_next.i.disp);
 
-            // If a fault does occur, the HART is parked and the instruction is bubbled with a NOP.
+            // If a fault does occur, the park request is recorded and the instruction is bubbled with a NOP.
             if (result.pr != ParkReason::Running) {
-                hart.park(result.pr);
+                hpo.memory_pr = result.pr;
                 hpo.mem_wb_next = Latch();
                 hpo.mem_wb_next.i.inst = 0x00000013;
                 return;

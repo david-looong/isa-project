@@ -58,6 +58,17 @@ struct HartPipelineObject {
     uint8_t drain_ticks_left;
     uint32_t csr_write_val;
     uint32_t csr_write_num;
+    ParkReason execute_pr;
+    ParkReason memory_pr;
+
+    void apply_hart_requests(Hart& hart) {
+        if (hart.get_pr() != ParkReason::Running)   return;
+
+        if (memory_pr != ParkReason::Running)       hart.park(memory_pr);
+        else if (execute_pr != ParkReason::Running) hart.park(execute_pr);
+
+        return;
+    }
 
     HartPipelineObject() {
         if_id_current.i.inst = 0x00000013;
@@ -96,6 +107,8 @@ struct HartPipelineObject {
         drain_ticks_left = 2;
         csr_write_val = 0;
         csr_write_num = 0;
+        execute_pr = ParkReason::Running;
+        memory_pr = ParkReason::Running;
     }
 };
 

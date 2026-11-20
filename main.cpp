@@ -18,6 +18,8 @@
 #include <iostream>
 #include <vector>
 #include <map>
+#include <barrier>
+#include <thread>
 
 int main(int argc, char* argv[]) {
     // Parses the command line arguments and stores them into a map.
@@ -81,46 +83,95 @@ int main(int argc, char* argv[]) {
         hpos.push_back(HartPipelineObject());
     }
 
-    uint32_t active_harts;
     SysCalls sys = {};
+    bool stop_flag = false;
+    bool phase_flag = false;
 
-    // Runs unless an exit syscall is indicated.
-    while (!sys.terminate) {
-        // If there are no more active HARTs (i.e., the HART is parked and all older instructions have been resolved), stop the loop.
-        active_harts = harts.size();
-        for (uint32_t i = 0; i < harts.size(); i++) {
-            if (harts[i].is_parked() && hpos[i].drain_ticks_left == 0 && hpos[i].mem_wait_current == 0) active_harts--;
-        }
-        if (active_harts == 0)  break;
+    // On completion of a worker thread's rising or falling edge.
+    auto on_completion = [&]() noexcept {
+        uint32_t active_harts = harts.size();
 
-        // Do all rising edge phases of each stage in the instruction pipeline per HART.
-        for (uint32_t i = 0; i < harts.size(); i++) {
-            fetch_rising_edge(harts[i], hpos[i]);
-            decode_rising_edge(harts[i], hpos[i], final_config.m, final_config.a);
-            execute_rising_edge(harts[i], hpos[i]);
-            memory_rising_edge(harts[i], hpos[i]);
-            writeback_rising_edge(harts[i], hpos[i]);
-        }
+        if (!phase_flag) {
+            // Services any syscalls picked up from the rising edge of the tick.
+            service_syscalls(harts, hpos, sys);
+            for (uint32_t i = 0; i < harts.size(); i++) hpos[i].apply_hart_requests(harts[i]);
+        } else {
+            // Applies any changes to the harts resulting from syscalls.
+            apply_hart_changes(harts, hpos, sys);
 
-        // Services any syscalls picked up from the rising edge of the tick.
-        service_syscalls(harts, hpos, sys);
+            // Keep count of whether any instruction older than a faulted instruction has finished.
+            for (uint32_t i = 0; i < harts.size(); i++) {
+                if (harts[i].is_parked() && hpos[i].drain_ticks_left > 0)  hpos[i].drain_ticks_left--;
+            }
 
-        // Do all falling edge phases of each stage in the instruction pipeline per HART.
-        for (uint32_t i = 0; i < harts.size(); i++) {
-            fetch_falling_edge(harts[i], hpos[i]);
-            decode_falling_edge(harts[i], hpos[i]);
-            execute_falling_edge(harts[i], hpos[i]);
-            memory_falling_edge(harts[i], hpos[i]);
-            writeback_falling_edge(harts[i], hpos[i]);
+            // If there are no more active HARTs (i.e., the HART is parked and all older instructions have been resolved), stop the loop.
+            for (uint32_t i = 0; i < harts.size(); i++) {
+                if (harts[i].is_parked() && hpos[i].drain_ticks_left == 0 && hpos[i].mem_wait_current == 0) active_harts--;
+            }
+
+            // Stop is determined if an exit syscall occurs or there are no more active HARTs.
+            stop_flag = (sys.terminate || active_harts == 0);
         }
 
-        // Applies any changes to the harts resulting from syscalls.
-        apply_hart_changes(harts, hpos, sys);
+        // Swap the phase from rising to falling or vice versa.
+        phase_flag = !phase_flag;
+    };
 
-        // Keep count of whether any instruction older than a faulted instruction has finished.
-        for (uint32_t i = 0; i < harts.size(); i++) {
-            if (harts[i].is_parked() && hpos[i].drain_ticks_left > 0)  hpos[i].drain_ticks_left--;
-        }
+    std::ptrdiff_t num_threads = std::ptrdiff_t(5 * harts.size());
+    std::barrier sync_point(num_threads, on_completion);
+
+    // Worker function for each thread. Does the rising/falling edge of indicated stage until an exit has been indicated
+    // or if there are no more active harts.
+    auto worker = [&](uint32_t hartid, char stage) {
+        do {
+            switch(stage) {
+                case 'f':
+                    fetch_rising_edge(harts[hartid], hpos[hartid]);
+                    sync_point.arrive_and_wait();
+                    fetch_falling_edge(harts[hartid], hpos[hartid]);
+                    sync_point.arrive_and_wait();
+                    break;
+                case 'd':
+                    decode_rising_edge(harts[hartid], hpos[hartid], final_config.m, final_config.a);
+                    sync_point.arrive_and_wait();
+                    decode_falling_edge(harts[hartid], hpos[hartid]);
+                    sync_point.arrive_and_wait();
+                    break;
+                case 'e':
+                    execute_rising_edge(harts[hartid], hpos[hartid]);
+                    sync_point.arrive_and_wait();
+                    execute_falling_edge(harts[hartid], hpos[hartid]);
+                    sync_point.arrive_and_wait();
+                    break;
+                case 'm':
+                    memory_rising_edge(harts[hartid], hpos[hartid]);
+                    sync_point.arrive_and_wait();
+                    memory_falling_edge(harts[hartid], hpos[hartid]);
+                    sync_point.arrive_and_wait();
+                    break;
+                case 'w':
+                    writeback_rising_edge(harts[hartid], hpos[hartid]);
+                    sync_point.arrive_and_wait();
+                    writeback_falling_edge(harts[hartid], hpos[hartid]);
+                    sync_point.arrive_and_wait();
+                    break;
+            }
+        } while (!stop_flag);
+    };
+
+    // For each HART, different threads do the rising/falling edges of each stage in the instruciton pipeline.
+    std::vector<std::thread> threads;
+    for (size_t i = 0; i < harts.size(); i++) {
+        threads.emplace_back(worker, i, 'f');
+        threads.emplace_back(worker, i, 'd');
+        threads.emplace_back(worker, i, 'e');
+        threads.emplace_back(worker, i, 'm');
+        threads.emplace_back(worker, i, 'w');
+    }
+
+    // Join the threads once all work is done.
+    for (auto& t : threads) {
+        if (t.joinable())   t.join();
     }
 
     // If an exit syscall was indicated, flush the output stream and return the exit code.
