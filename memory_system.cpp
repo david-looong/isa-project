@@ -7,7 +7,7 @@
 #include "memory_system.hpp"
 
 // Initializes RAM + cache settings as well as sets up cache levels.
-MemorySystem::MemorySystem(uint32_t mem_size, Settings settings) : mem_size(mem_size), ram(new uint8_t[mem_size]), s(settings), granule(granule_size()) {
+MemorySystem::MemorySystem(uint32_t mem_size, Settings settings) : mem_size(mem_size), ram(new uint8_t[mem_size]), s(settings), granule(granule_size()), cache_mutexes(settings.harts) {
     if (settings.cL >= 1) {
         for (uint32_t i = 0; i < settings.harts; i++) {
             L1.push_back(Cache(settings.cS1, settings.cB1, settings.c1_type, settings.cW1, settings.cE1));
@@ -54,6 +54,8 @@ void MemorySystem::write(uint32_t addr, uint8_t size, uint32_t value) {
 std::vector<uint8_t> MemorySystem::ram_range_read(uint64_t paddr, uint32_t len) {
     std::vector<uint8_t> read_data;
 
+    std::lock_guard<std::mutex> lock(ram_mutex);
+
     for (size_t i = 0; i < len; i++) {
         if ((paddr + i) < mem_size) read_data.push_back(ram[paddr + i]);
         else                        read_data.push_back(0);
@@ -64,6 +66,8 @@ std::vector<uint8_t> MemorySystem::ram_range_read(uint64_t paddr, uint32_t len) 
 
 // Writes a range of bytes to RAM.
 void MemorySystem::ram_range_write(uint64_t paddr, const std::vector<uint8_t> &bytes) {
+    std::lock_guard<std::mutex> lock(ram_mutex);
+
     for (size_t i = 0; i < bytes.size(); i++) {
         if ((paddr + i) < mem_size) ram[paddr + i] = bytes[i];
     }
@@ -80,6 +84,9 @@ std::vector<uint8_t> MemorySystem::range_read(uint32_t hartid, uint8_t level_num
     uint32_t room;
     uint32_t piece;
     std::vector<uint8_t> read_data;
+    std::unique_lock<std::mutex> l3_lock(l3_mutex, std::defer_lock);
+
+    if (level_num == 3) l3_lock.lock();
     
     // Base case: if the level number is greater than the indicated number of cache levels,
     // we've reached RAM and need to return the bytes read by RAM.
@@ -113,7 +120,7 @@ std::vector<uint8_t> MemorySystem::range_read(uint32_t hartid, uint8_t level_num
             if (s.cC == CacheCoherency::dir && level_num <= 2 && victim.was_valid) {
                 uint64_t vbase = granule_base(victim.victim_addr);
                 if (!holds_granule(hartid, vbase)) {
-                    dir[vbase].sharers &= ~(1u << hartid);
+                    dir_map_access(vbase).sharers &= ~(1u << hartid);
                 }
             }
         }
@@ -137,6 +144,9 @@ void MemorySystem::range_write(uint32_t hartid, uint8_t level_num, uint64_t padd
     uint32_t room;
     uint32_t piece;
     uint32_t cur_line = 0;
+    std::unique_lock<std::mutex> l3_lock(l3_mutex, std::defer_lock);
+
+    if (level_num == 3) l3_lock.lock();
     
     // Base case: if the level number is greater than the indicated number of cache levels,
     // we've reached RAM and need to write bytes to RAM.
@@ -170,7 +180,7 @@ void MemorySystem::range_write(uint32_t hartid, uint8_t level_num, uint64_t padd
             if (s.cC == CacheCoherency::dir && level_num <= 2 && victim.was_valid) {
                 uint64_t vbase = granule_base(victim.victim_addr);
                 if (!holds_granule(hartid, vbase)) {
-                    dir[vbase].sharers &= ~(1u << hartid);
+                    dir_map_access(vbase).sharers &= ~(1u << hartid);
                 }
             }
         }
@@ -361,11 +371,13 @@ void MemorySystem::sfence(uint32_t hartid) {
 MemorySystemResult MemorySystem::phys_access(uint64_t paddr, uint8_t size, AccessType type, [[maybe_unused]] uint32_t mhartid, [[maybe_unused]] uint32_t satp, uint32_t store_val, [[maybe_unused]] uint32_t amo_operand, [[maybe_unused]] AtomicOps op) {
     MemorySystemResult result;
     uint64_t deepest = 0;
+    uint16_t sharers_mask = 1u << mhartid;
     std::vector<uint8_t> bytes;
     std::vector<std::pair<uint64_t, Mesi>> granules;
     std::unique_lock<std::mutex> bus_lock;
     std::unique_lock<std::mutex> dir_lock_1;
     std::unique_lock<std::mutex> dir_lock_2;
+    std::vector<std::unique_lock<std::mutex>> cache_locks;
 
     // Bounds checking RAM.
     if (paddr + size > mem_size) {
@@ -387,20 +399,34 @@ MemorySystemResult MemorySystem::phys_access(uint64_t paddr, uint8_t size, Acces
 
     // Which lock is taken depends on which coherency protocol is occuring.
     bool coherent = (s.cL >= 1 && s.cC != CacheCoherency::none);
-    if (coherent) {
-        if (s.cC == CacheCoherency::snoop) {
-            bus_lock = std::unique_lock<std::mutex>(bus_mutex);
-        } else {
-            for (size_t i = 0; i < granules.size(); i++) {
-                if (i == 0) dir_lock_1 = std::unique_lock<std::mutex>(dir[granules[i].first].dir_lock);
-                else        dir_lock_2 = std::unique_lock<std::mutex>(dir[granules[i].first].dir_lock);
-            }
+
+    // Bus lock when coherence protocol is snoop or there is no coherence protocol.
+    if (s.cC == CacheCoherency::snoop || !coherent)  bus_lock = std::unique_lock<std::mutex>(bus_mutex);
+    
+    // If coherence protocol is dir, lock the dir map mutexes based on the number of granules.
+    // Obtain the HARTs that will access the cache, and lock the cache locks for those HARTs.
+    if (s.cC == CacheCoherency::dir && coherent) {
+        for (size_t i = 0; i < granules.size(); i++) {
+            if (i == 0) dir_lock_1 = std::unique_lock<std::mutex>(dir_map_access(granules[i].first).dir_lock);
+            else        dir_lock_2 = std::unique_lock<std::mutex>(dir_map_access(granules[i].first).dir_lock);
+        }
+
+        for (size_t i = 0; i < granules.size(); i++) {
+            sharers_mask |= dir_map_access(granules[i].first).sharers.load();
+        }
+
+        cache_locks.reserve(s.harts);
+
+        for (uint32_t h = 0; h < s.harts; h++) {
+            if ((sharers_mask & (1u << h)) != 0)    cache_locks.emplace_back(cache_mutexes[h]);
         }
     }
 
     // Determines if a read or write has occurred.
     bool is_read = (type == AccessType::Fetch || type == AccessType::Load || type == AccessType::LR);
+    std::unique_lock<std::mutex> lock(reservation_mutex);
     bool is_write = (type == AccessType::Store || (type == AccessType::SC && reservations[mhartid].valid && reservations[mhartid].word_addr == paddr) || type == AccessType::Amo);
+    lock.unlock();
 
     // Only occurs if coherency is activated.
     if ((is_read || is_write) && coherent) {
@@ -483,12 +509,13 @@ MemorySystemResult MemorySystem::phys_access(uint64_t paddr, uint8_t size, Acces
                 set_my_state(mhartid, granules[i].first, Mesi::M);
             }
 
-            if (s.cC == CacheCoherency::dir)    dir[granules[i].first].sharers |= (1u << mhartid);
+            if (s.cC == CacheCoherency::dir)    dir_map_access(granules[i].first).sharers |= (1u << mhartid);
         }
     }
 
     // LR loads and sets the per-HART reservation; SC succeeds only if it writes, otherwise
     // it doesn't write. Either way, the reservation clears.
+    lock.lock();
     if (type == AccessType::LR) {
         reservations[mhartid].valid = true;
         reservations[mhartid].word_addr = paddr;
@@ -513,6 +540,7 @@ MemorySystemResult MemorySystem::phys_access(uint64_t paddr, uint8_t size, Acces
             }
         }
     }
+    lock.unlock();
 
     // Deepest cache level reached indicates the latency of the memory operation.
     if (deepest == s.cL + 1)    result.latency = s.RAM;
@@ -612,7 +640,7 @@ bool MemorySystem::bus_transaction(uint32_t hartid, uint64_t base, BusOp bus_op,
     bool any = false;
     DirEntry* cur_dir = nullptr;
     
-    if (s.cC == CacheCoherency::dir)    cur_dir = &dir[base];
+    if (s.cC == CacheCoherency::dir)    cur_dir = &dir_map_access(base);
     
     // Every other HART (or sharers if coherency is dir) is snooped.
     for (uint32_t hart = 0; hart < s.harts; hart++) {
@@ -629,9 +657,10 @@ bool MemorySystem::bus_transaction(uint32_t hartid, uint64_t base, BusOp bus_op,
 
 // Returns granule's sharer mask (used for tests).
 uint16_t MemorySystem::dir_sharers(uint64_t base) {
+    std::lock_guard<std::mutex> lock(map_mutex);
     std::unordered_map<uint64_t, DirEntry>::iterator it = dir.find(base);
 
-    if (it != dir.end())    return it->second.sharers;
+    if (it != dir.end())    return it->second.sharers.load();
     else                    return 0;
 }
 
@@ -672,4 +701,11 @@ bool MemorySystem::allowed(uint8_t perms, AccessType type) {
     }
 
     return true;
+}
+
+// Locks the dir map and returns a reference to the dir entry associated with the base address / granule.
+DirEntry& MemorySystem::dir_map_access(uint64_t base) {
+    std::lock_guard<std::mutex> lock(map_mutex);
+
+    return dir[base];
 }

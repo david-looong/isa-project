@@ -18,6 +18,7 @@
 #include <thread>
 #include <utility>
 #include <unordered_map>
+#include <atomic>
 #include "cache.hpp"
 
 enum class ParkReason { Running, System, AmoStore, Load, Fetch, IllegalInstruction, Access };
@@ -32,7 +33,7 @@ struct MemorySystemResult {
 };
 
 struct DirEntry {
-    uint16_t sharers = 0;
+    std::atomic<uint16_t> sharers = 0;
     std::mutex dir_lock;
 };
 
@@ -99,6 +100,11 @@ class MemorySystem {
         std::optional<Cache> L3;
         std::mutex bus_mutex;
         std::unordered_map<uint64_t, DirEntry> dir;
+        std::mutex map_mutex;
+        std::mutex l3_mutex;
+        std::mutex ram_mutex;
+        std::mutex reservation_mutex;
+        std::vector<std::mutex> cache_mutexes;
         uint32_t read(uint32_t addr, uint8_t size);
         void write(uint32_t addr, uint8_t size, uint32_t value);
         std::vector<uint8_t> ram_range_read(uint64_t paddr, uint32_t len);
@@ -114,9 +120,8 @@ class MemorySystem {
         bool holds_granule(uint32_t hartid, uint64_t base);
         bool byte_ranges_overlap(uint32_t vaddr, uint32_t word_addr, uint32_t size);
         bool allowed(uint8_t perms, AccessType type);
-        // per-HART state, indexed by HART id:
-        //     TLB, LR/SC reservation
-        // the "busy until tick" counter
+        DirEntry& dir_map_access(uint64_t base);
+
     public:
         MemorySystem(uint32_t mem_size, Settings settings);
         MemorySystemResult access(uint32_t vaddr, uint8_t size, AccessType type, [[maybe_unused]] uint32_t mhartid, [[maybe_unused]] uint32_t satp, uint32_t store_val, [[maybe_unused]] uint32_t amo_operand, [[maybe_unused]] AtomicOps op);
