@@ -38,7 +38,7 @@ g++ -std=c++23 -Wall -o machine main.cpp config.cpp error.cpp machine.cpp memory
 clang++ -std=c++23 -Wall -o machine main.cpp config.cpp error.cpp machine.cpp memory_system.cpp cache.cpp register_file.cpp hart.cpp elf.cpp branch_predictor.cpp fetch.cpp decode.cpp execute.cpp memory.cpp writeback.cpp syscall.cpp
 ```
 
-**Platform note:** the `getchar` system call must not block (writeup Table 8), which standard C++
+**Platform note:** the `getchar` system call must not block, which standard C++
 cannot do on standard input. It uses POSIX `poll()` and `read()` (`<poll.h>`, `<unistd.h>`), so the
 machine builds on Linux and macOS, but not on Windows.
 
