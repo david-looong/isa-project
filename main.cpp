@@ -20,6 +20,7 @@
 #include <map>
 #include <barrier>
 #include <thread>
+#include <chrono>
 
 int main(int argc, char* argv[]) {
     // Parses the command line arguments and stores them into a map.
@@ -86,6 +87,16 @@ int main(int argc, char* argv[]) {
     SysCalls sys = {};
     bool stop_flag = false;
     bool phase_flag = false;
+    std::ofstream output;
+    std::chrono::steady_clock::duration period = std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double>(1.0 / final_config.hz));
+    std::chrono::steady_clock::time_point next_tick = std::chrono::steady_clock::now();
+
+    // If output file is indicated, attempt to open the file. If unsuccessful, a fatal error occurs.
+    if (resolved.find("o") != resolved.end() && resolved["o"] != "-") {
+        output.open(resolved["o"], std::ios::binary);
+        if (!output)    fatal_error("Failed to open file for writing.");
+        sys.out = &output;
+    }
 
     // On completion of a worker thread's rising or falling edge.
     auto on_completion = [&]() noexcept {
@@ -111,6 +122,13 @@ int main(int argc, char* argv[]) {
 
             // Stop is determined if an exit syscall occurs or there are no more active HARTs.
             stop_flag = (sys.terminate || active_harts == 0);
+
+            // Controls how fast the pipeline moves for each HART.
+            if (!stop_flag) {
+                next_tick += period;
+                if (std::chrono::steady_clock::now() < next_tick)   std::this_thread::sleep_until(next_tick);
+                else                                                next_tick = std::chrono::steady_clock::now();
+            }
         }
 
         // Swap the phase from rising to falling or vice versa.
