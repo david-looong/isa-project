@@ -25,7 +25,52 @@ This repository contains all source files required to run the project as well as
 * ```check_X.zip``` - A zip folder that contains the source files of my project at the time of submitting for a particular checkpoint. Naturally, the contents of the folder grow with each checkpoint.
 
 ## Build Instructions
-TBD!
+
+### Compiling with g++
+
+```
+g++ -std=c++23 -Wall -o machine main.cpp config.cpp error.cpp machine.cpp memory_system.cpp cache.cpp register_file.cpp hart.cpp elf.cpp branch_predictor.cpp fetch.cpp decode.cpp execute.cpp memory.cpp writeback.cpp syscall.cpp
+```
+
+### Compiling with clang++
+
+```
+clang++ -std=c++23 -Wall -o machine main.cpp config.cpp error.cpp machine.cpp memory_system.cpp cache.cpp register_file.cpp hart.cpp elf.cpp branch_predictor.cpp fetch.cpp decode.cpp execute.cpp memory.cpp writeback.cpp syscall.cpp
+```
+
+**Platform note:** the `getchar` system call must not block (writeup Table 8), which standard C++
+cannot do on standard input. It uses POSIX `poll()` and `read()` (`<poll.h>`, `<unistd.h>`), so the
+machine builds on Linux and macOS, but not on Windows.
+
+### Running
+
+The `-i` switch (input ELF file) is required; omitting it is a fatal error.
+
+```
+./machine -i <program.elf> [-harts <n>] [-mem <bytes>] [-hz <rate>] [-o <file|->] [-cL <0-3>] [-cC <none|snoop|dir>] [-mmu <on|off>] [-tlb <slots>] [other switches...] [-f config.txt]
+```
+
+Example:
+
+```
+./machine -i stdio.elf -harts 2 -mem 1M
+```
+
+Standard output contains only what the program writes with `putchar`; `getchar` reads standard
+input (redirect a file with `< input.txt`).
+
+- **`-o <file>`** sends the `putchar` output to that file instead (created or truncated at
+  startup; a path that can't be opened is a fatal error). `-o -`, the default, is standard output.
+- **`-hz <rate>`** is the clock rate in ticks per second (decimal suffixes: `1K` = 1,000, `1M`,
+  `1G`; 1 to 4,294,967,295). The machine runs at the slower of that rate and the host's speed.
+  The default is 100 Hz, so a program that needs many ticks finishes much sooner with a high
+  rate, for example `-hz 1G` (effectively unpaced).
+
+The machine runs until:
+
+- a HART calls `exit`: the host exit code is the program's a0 (the host keeps its low 8 bits);
+- every HART has stopped with `stop_hart`: exit code 0;
+- every HART is parked and at least one was parked by a fault: exit code 1.
 
 ## AI Disclosure
-I utilized two models from Anthropic via Claude Code to assist me throughout this project: Sonnet 5 and Opus 5.5. These models were only used for having high-level discussions on design decisions and generating test case suites for each checkpoint.
+I utilized two models from Anthropic via Claude Code to assist me throughout this project: Sonnet 5 and Opus 5.5. These models were only used for having high-level discussions on design decisions, debugging logic, and generating test case suites for each checkpoint.
