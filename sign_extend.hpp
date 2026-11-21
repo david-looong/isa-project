@@ -12,6 +12,7 @@
 
 #include <cstdint>
 
+// Sign-extends an unsigned 32-bit integer.
 inline uint32_t sign_extend(uint32_t value, uint8_t sign_bit_index) {
     // Isolate the sign bit.
     uint32_t sign_bit = (value >> sign_bit_index) & 1;

@@ -102,10 +102,26 @@ bool is_in_range_0_to_3(const std::string& val) {
 
 // Validates if a string has a valid suffix for bytes (K, M, G) or is numeric.
 bool has_valid_suffix_b(const std::string& val) {
-    if (val.back() == 'K' || val.back() == 'M' || val.back() == 'G') {
-        return true;
+    std::string str = val;
+    if (str.back() == 'K' || str.back() == 'M' || str.back() == 'G') {
+        str.pop_back();
     }
-    return (std::all_of(val.begin(), val.end(), ::isdigit));
+
+    // Reject empty values, non-digits, and massive numbers.
+    if (str.size() == 0 || str.size() > 10 || !std::all_of(str.begin(), str.end(), ::isdigit)) {
+        return false;
+    }
+
+    uint64_t mult = 1;
+    
+    if (val.back() == 'K')      mult = static_cast<uint64_t>(std::pow(1024, 1));
+    else if (val.back() == 'M') mult = static_cast<uint64_t>(std::pow(1024, 2));
+    else if (val.back() == 'G') mult = static_cast<uint64_t>(std::pow(1024, 3));
+
+    uint64_t value = static_cast<uint64_t>(std::stoull(str)) * mult;
+
+    // True only if the value isn't 0 and within the bounds of 32-bits.
+    return (value != 0 && value <= UINT32_MAX);
 }
 
 // Validates if a string has a valid suffix for decimal (K, M, G) or is numeric.
@@ -128,7 +144,7 @@ bool has_valid_suffix_d(const std::string& val) {
 
     uint64_t value = static_cast<uint64_t>(std::stoull(str)) * mult;
 
-    // True only if the value is 0 and within the bounds of 32-bits.
+    // True only if the value isn't 0 and within the bounds of 32-bits.
     return (value != 0 && value <= UINT32_MAX);
 }
 

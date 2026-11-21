@@ -188,8 +188,8 @@ void execute_rising_edge(Hart& hart, HartPipelineObject& hpo) {
 
 // Falling edge for the execute stage of the instruction pipeline.
 void execute_falling_edge(Hart& hart, HartPipelineObject& hpo) {
-    // Sets instruction as a NOP if the HART is parked.
-    if (hart.is_parked()) {
+    // Sets instruction as a NOP if the HART is parked or a memory redirect is indicated.
+    if (hart.is_parked() || hpo.mem_redirect) {
         hpo.ex_mem_current = Latch();
         hpo.ex_mem_current.i.inst = 0x00000013;
         return;

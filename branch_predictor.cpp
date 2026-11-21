@@ -6,6 +6,7 @@
 
 #include "branch_predictor.hpp"
 
+// Predicts the state of the PC (taken or not-taken).
 uint8_t BranchPredictor::predict(uint32_t pc) {
     // Returns not taken if branch prediction is disabled. Otherwise, if the PC-relative index
     // doesn't have a valid branch entry, or if the PC doesn't match the PC at that index, it
@@ -20,6 +21,7 @@ uint8_t BranchPredictor::predict(uint32_t pc) {
     return branch_target_buffer[pc % bp_rows].state;
 }
 
+// Updates the branch table as needed based on the PC.
 void BranchPredictor::update(uint32_t pc, uint8_t outcome) {
     // There's nothing to update if branch prediction is disabled.
     if (bp_rows == 0)   return;

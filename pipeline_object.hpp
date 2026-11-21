@@ -30,6 +30,7 @@ struct HartPipelineObject {
     Latch mem_wb_next;
     Latch mem_pending;
     bool redirect;
+    bool mem_redirect;
     bool no_stall;
     bool branch_resolved_tick;
     bool mem_stall;
@@ -51,6 +52,7 @@ struct HartPipelineObject {
     uint32_t mem_wait_next;
     uint32_t fetch_wait;
     uint32_t redirect_pc;
+    uint32_t mem_redirect_pc;
     uint8_t wb_register = 0;
     uint32_t wb_register_value = 0;
     uint32_t recorded_branch_pc;
@@ -61,11 +63,12 @@ struct HartPipelineObject {
     ParkReason execute_pr;
     ParkReason memory_pr;
 
+    // Parks the HART if a park request was indicated in execute or memory.
     void apply_hart_requests(Hart& hart) {
         if (hart.get_pr() != ParkReason::Running)   return;
 
-        if (memory_pr != ParkReason::Running)       hart.park(memory_pr);
-        else if (execute_pr != ParkReason::Running) hart.park(execute_pr);
+        if (memory_pr != ParkReason::Running)                           hart.park(memory_pr);
+        else if (execute_pr != ParkReason::Running && !mem_redirect)    hart.park(execute_pr);
 
         return;
     }
@@ -81,6 +84,7 @@ struct HartPipelineObject {
         mem_wb_next.i.inst = 0x00000013;
         mem_pending.i.inst = 0x00000013;
         redirect = false;
+        mem_redirect = false;
         no_stall = true;
         branch_resolved_tick = false;
         mem_stall = false;
@@ -102,6 +106,7 @@ struct HartPipelineObject {
         mem_wait_next = 0;
         fetch_wait = 0;
         redirect_pc = 0;
+        mem_redirect_pc = 0;
         recorded_branch_pc = 0;
         recorded_branch_outcome = 0;
         drain_ticks_left = 2;

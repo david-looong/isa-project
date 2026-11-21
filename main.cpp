@@ -22,6 +22,7 @@
 #include <thread>
 #include <chrono>
 
+// Runs the virtual machine until conditions met to exit are fulfilled.
 int main(int argc, char* argv[]) {
     // Parses the command line arguments and stores them into a map.
     std::map<std::string,std::string> cli_map = parse_cli(argc, argv);

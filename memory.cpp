@@ -12,6 +12,7 @@ void memory_rising_edge(Hart &hart, HartPipelineObject &hpo) {
     hpo.mem_stall = false;
     hpo.csr_write_pending = false;
     hpo.sfence_pending = false;
+    hpo.mem_redirect = false;
     hpo.memory_pr = ParkReason::Running;
     MemorySystemResult result;
     uint32_t old_csr_val = 0;
@@ -55,6 +56,12 @@ void memory_rising_edge(Hart &hart, HartPipelineObject &hpo) {
                 return;
             }
 
+            // Indicates an satp write.
+            if (csr_will_write && csr_num == 0x180) {
+                hpo.mem_redirect = true;
+                hpo.mem_redirect_pc = hpo.mem_wb_next.pc + 4;
+            }
+
             // Determine the source value and old CSR value to place in the result field.
             csr_source_val = hpo.mem_wb_next.i.result;
             old_csr_val = hart.get_csr(csr_num);
@@ -79,6 +86,8 @@ void memory_rising_edge(Hart &hart, HartPipelineObject &hpo) {
         // In the event we are dealing with an SFENCE.VMA instruction.
         } else if ((hpo.mem_wb_next.i.inst & 0x7F) == 0x73 && funct3 == 0 && funct7 == 0b0001001) {
             hpo.sfence_pending = true;
+            hpo.mem_redirect = true;
+            hpo.mem_redirect_pc = hpo.mem_wb_next.pc + 4;
         }
 
         // Determines how to access memory if it is an atomic instruction.

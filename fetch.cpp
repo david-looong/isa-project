@@ -6,6 +6,7 @@
 
 #include "fetch.hpp"
 
+// Fetches the next instruction, as well as latency and fault data if applicable.
 Instruction fetch(Hart& hart, HartPipelineObject& hpo) {
     Instruction i;
 
@@ -58,18 +59,26 @@ void fetch_rising_edge(Hart& hart, HartPipelineObject& hpo) {
     return;
 }
 
-// Falling edge for the fetch stage of the isntruction pipeline.
+// Falling edge for the fetch stage of the instruction pipeline.
 void fetch_falling_edge(Hart& hart, HartPipelineObject& hpo) {
     // Does nothing if HART is parked.
     if (hart.is_parked()) {
         return;
     }
 
-    // If a branch redirect occurs, treat the instruction as a NOP and set the PC to the redirected
+    // If a branch or memory redirect occurs, treat the instruction as a NOP and set the PC to the redirected
     // PC value. If a memory stall or load-use stall occurs, hold. If a fetch stall occurs, bubble
     // with a NOP as well. Otherwise, set the fetched instruction up for the decode stage and move
     // the PC to its predicted value.
-    if (hpo.redirect) {
+    if (hpo.mem_redirect) {
+        hpo.if_id_current = Latch();
+        hpo.if_id_current.i.inst = 0x00000013;
+        hart.set_pc(hpo.mem_redirect_pc);
+        hpo.fetch_valid = false;
+        hpo.fetch_wait = 0;
+        hart.increment_instret();
+        hart.increment_csr_cycle();
+    } else if (hpo.redirect) {
         hpo.if_id_current = Latch();
         hpo.if_id_current.i.inst = 0x00000013;
         hart.set_pc(hpo.redirect_pc);

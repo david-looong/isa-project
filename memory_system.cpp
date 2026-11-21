@@ -680,6 +680,7 @@ bool MemorySystem::holds_granule(uint32_t hartid, uint64_t base) {
     return false;
 }
 
+// Returns whether [virtual address, virtual address + size] and [word address, word address + 4] overlap or not.
 bool MemorySystem::byte_ranges_overlap(uint32_t vaddr, uint32_t word_addr, uint32_t size) {
     return vaddr < word_addr + 4 && word_addr < vaddr + size;
 }

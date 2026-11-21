@@ -448,10 +448,10 @@ void decode_falling_edge(Hart& hart, HartPipelineObject& hpo) {
         return;
     }
 
-    // If a branch redirect is indicated, a NOP bubble is set up for execute. If a memory stall
+    // If a branch or memory redirect is indicated, a NOP bubble is set up for execute. If a memory stall
     // occurs, hold the instruction. If a load-use stall occurs, bubble with NOP as well.
     // If no stalls occur, we set the decoded instruction up for execute stage.
-    if (hpo.redirect) {
+    if (hpo.redirect || hpo.mem_redirect) {
         hpo.id_ex_current = Latch();
         hpo.id_ex_current.i.inst = 0x00000013;
     } else if (!hpo.mem_stall && hpo.no_stall) {
